@@ -1,0 +1,9 @@
+.env
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+data/*
+browser-data/*
+.pytest_cache/
+*.log

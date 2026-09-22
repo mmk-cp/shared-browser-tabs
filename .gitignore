@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.py[cod]
+data/*.db
+browser-data/*
+!browser-data/.gitkeep
+.pytest_cache/
