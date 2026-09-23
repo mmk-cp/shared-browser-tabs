@@ -1,14 +1,59 @@
+import asyncio
+import base64
 import logging
 from urllib.parse import urlsplit
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from app.db import SessionLocal
-from app.models import BrowserTab
 from app.services.auth_service import SESSION_COOKIE, serializer, settings
 from app.services.tab_manager import tab_manager
 from app.services.stream_manager import stream_manager
+from app.services.input_manager import handle_input
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.websocket("/ws/input")
+async def input_socket(websocket: WebSocket):
+    user = await authenticated_user(websocket)
+    origin = websocket.headers.get("origin")
+    if not user or not user.is_active or not origin or urlsplit(origin).netloc != websocket.headers.get("host"):
+        await websocket.close(code=4403)
+        return
+    with SessionLocal() as db:
+        tab = await tab_manager.get_or_create(db, user)
+        page_id = tab.page_id
+    page = tab_manager.browser.get_page(page_id)
+    if not page:
+        await websocket.close(code=1011)
+        return
+    await websocket.accept()
+    try:
+        while True:
+            event = await websocket.receive_json()
+            if not isinstance(event, dict):
+                continue
+            try:
+                if event.get("type") == "resize":
+                    result = await tab_manager.browser.resize_page(page_id, int(event["width"]), int(event["height"]))
+                else:
+                    result = await asyncio.wait_for(handle_input(page, event), timeout=8)
+                if event.get("id") is not None:
+                    await websocket.send_json({"id": event["id"], "result": result})
+            except Exception as exc:
+                logger.warning("TAB_INPUT_FAILED type=%s error=%s", event.get("type"), exc)
+                if event.get("id") is not None:
+                    await websocket.send_json({"id": event["id"], "error": "این فرمان اجرا نشد؛ دوباره تلاش کنید."})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if not page.is_closed():
+            try:
+                await handle_input(page, {"type": "release"})
+            except Exception:
+                pass
 
 
 async def authenticated_user(websocket: WebSocket):
@@ -24,63 +69,65 @@ async def authenticated_user(websocket: WebSocket):
         return db.get(User, int(data.get("user_id", 0)))
 
 
-@router.websocket("/ws/browser")
-async def browser_socket(websocket: WebSocket):
+@router.websocket("/ws/vnc")
+async def vnc_socket(websocket: WebSocket):
     user = await authenticated_user(websocket)
     if not user or not user.is_active:
         await websocket.close(code=4401)
         return
-    # Browsers send Origin automatically for WS. Reject cross-site attempts.
     origin = websocket.headers.get("origin")
     host = websocket.headers.get("host", "")
-    if origin and urlsplit(origin).netloc != host:
-        # Host/origin checks are intentionally conservative; deployments behind a
-        # proxy can omit Origin or configure the proxy to preserve same-origin.
-        logger.warning("WS_ORIGIN_REJECTED user=%s origin=%s", user.username, origin)
+    if not origin or urlsplit(origin).netloc != host:
         await websocket.close(code=4403)
         return
+
     with SessionLocal() as db:
         tab = await tab_manager.get_or_create(db, user)
-        tab_id, page_id, url, title = tab.id, tab.page_id, tab.url, tab.title
+        page_id = tab.page_id
     page = tab_manager.browser.get_page(page_id)
-    if not page:
+    xid = tab_manager.browser.window_ids.get(page_id)
+    if not page or not xid:
         await websocket.close(code=1011)
         return
-    await websocket.accept()
-    await stream_manager.add_socket(page_id, page, websocket)
-    await websocket.send_json({"type": "state", "url": page.url, "title": await page.title(),
-                               "width": settings.default_width, "height": settings.default_height})
-    logger.info("WS_CONNECTED user=%s tab=%s", user.username, tab_id)
-    try:
+    session = await stream_manager.ensure(page_id, page, xid)
+    reader, writer = await asyncio.open_connection("127.0.0.1", session.port)
+    offered = websocket.scope.get("subprotocols", [])
+    await websocket.accept(subprotocol="binary" if "binary" in offered else None)
+    logger.info("VNC_CONNECTED user=%s page=%s", user.username, page_id)
+
+    async def browser_to_vnc() -> None:
         while True:
-            event = await websocket.receive_json()
-            kind = event.get("type")
-            if kind == "mouse_move":
-                await page.mouse.move(float(event.get("x", 0)), float(event.get("y", 0)))
-            elif kind in {"mouse_down", "mouse_up"}:
-                method = getattr(page.mouse, kind.removeprefix("mouse_"))
-                await method(button=event.get("button", "left"))
-            elif kind == "mouse_wheel":
-                await page.mouse.wheel(float(event.get("delta_x", 0)), float(event.get("delta_y", 0)))
-            elif kind in {"click", "double_click"}:
-                x, y = float(event.get("x", 0)), float(event.get("y", 0))
-                if kind == "click": await page.mouse.click(x, y, button=event.get("button", "left"))
-                else: await page.mouse.dblclick(x, y, button=event.get("button", "left"))
-            elif kind in {"keyboard_down", "keyboard_up"}:
-                key = event.get("key") or event.get("code")
-                if key:
-                    method = page.keyboard.down if kind == "keyboard_down" else page.keyboard.up
-                    await method(key)
-            elif kind == "text_input":
-                await page.keyboard.insert_text(str(event.get("text", "")))
-            elif kind == "resize":
-                width, height = int(event.get("width", settings.default_width)), int(event.get("height", settings.default_height))
-                if 320 <= width <= 3840 and 200 <= height <= 2160:
-                    await page.set_viewport_size({"width": width, "height": height})
-    except WebSocketDisconnect:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            payload = message.get("bytes")
+            if payload is None and message.get("text") is not None:
+                # Compatibility with old noVNC clients using the base64 WS
+                # subprotocol. Current clients always use binary frames.
+                payload = base64.b64decode(message["text"])
+            if payload:
+                writer.write(payload)
+                await writer.drain()
+
+    async def vnc_to_browser() -> None:
+        while data := await reader.read(65536):
+            await websocket.send_bytes(data)
+
+    tasks = {
+        asyncio.create_task(browser_to_vnc()),
+        asyncio.create_task(vnc_to_browser()),
+    }
+    try:
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            if not task.cancelled():
+                task.exception()
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+    except (WebSocketDisconnect, ConnectionError, asyncio.CancelledError):
         pass
-    except Exception as exc:
-        logger.info("WS_CLOSED user=%s error=%s", user.username, exc)
     finally:
-        await stream_manager.remove_socket(page_id, websocket)
-        logger.info("WS_DISCONNECTED user=%s tab=%s", user.username, tab_id)
+        writer.close()
+        await writer.wait_closed()
+        logger.info("VNC_DISCONNECTED user=%s page=%s", user.username, page_id)

@@ -5,6 +5,7 @@ from app.db import get_db
 from app.models import User
 from app.services.browser_manager import browser_manager
 from app.services.tab_manager import tab_manager
+from app.services.stream_manager import stream_manager
 
 router = APIRouter(prefix="/api/browser", tags=["browser"])
 
@@ -19,5 +20,6 @@ async def start(user: User = Depends(protected_admin), db: Session = Depends(get
 
 @router.post("/restart")
 async def restart(user: User = Depends(protected_admin), db: Session = Depends(get_db)):
+    await stream_manager.stop_all()
     await browser_manager.restart(); await tab_manager.restore_pages(db)
     return {"running": True, "pages": len(browser_manager.pages)}

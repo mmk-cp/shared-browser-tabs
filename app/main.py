@@ -41,11 +41,13 @@ async def lifespan(app: FastAPI):
         await browser_manager.start()
         await tab_module.tab_manager.restore_pages(db)
     yield
+    await stream_manager.stop_all()
     await browser_manager.stop()
 
 
 app = FastAPI(title="Shared Browser Tabs", version="1.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+app.mount("/novnc", StaticFiles(directory="/usr/share/novnc"), name="novnc")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 app.include_router(auth.router)
 app.include_router(browser.router)

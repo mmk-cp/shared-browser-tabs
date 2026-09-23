@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     browser_jpeg_quality: int = 70
     default_width: int = 1280
     default_height: int = 720
+    vnc_base_port: int = 5900
+    vnc_view_width: int = 1440
+    vnc_view_height: int = 900
     admin_username: str = "admin"
     admin_password: str = "change-me"
     cookie_secure: bool = False

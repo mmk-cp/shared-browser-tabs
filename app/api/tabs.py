@@ -9,6 +9,7 @@ from app.api.deps import current_user, protected_user
 from app.db import get_db
 from app.models import User, BrowserTab
 from app.services.tab_manager import tab_manager
+from app.services.input_manager import selection_text
 
 router = APIRouter(prefix="/api/tabs", tags=["tabs"])
 logger = logging.getLogger(__name__)
@@ -34,6 +35,9 @@ async def create_tab(user: User = Depends(protected_user), db: Session = Depends
 class NavigateRequest(BaseModel):
     url: str
 
+class TextInputRequest(BaseModel):
+    text: str
+
 @router.post("/me/navigate")
 async def navigate(payload: NavigateRequest, user: User = Depends(protected_user), db: Session = Depends(get_db)):
     parsed = urlparse(payload.url.strip())
@@ -45,18 +49,10 @@ async def navigate(payload: NavigateRequest, user: User = Depends(protected_user
         tab = await tab_manager.get_or_create(db, user)
         page = tab_manager.get_page(tab)
     try:
-        # `commit` is enough to start displaying the document.  Waiting for
-        # `domcontentloaded` is unreliable for long-lived SPAs (ChatGPT and
-        # challenge pages may keep network activity open indefinitely).
+        # Respond when the document starts; subresources can load afterwards.
         await page.goto(payload.url.strip(), wait_until="commit", timeout=15000)
     except PlaywrightTimeoutError as exc:
-        # A timeout after the navigation has started is not a failed
-        # navigation.  The page is still usable and its frame events will
-        # update the URL/title in the background.
-        if page.url not in {"about:blank", ""}:
-            logger.warning("NAVIGATION_COMMIT_TIMEOUT url=%s current=%s", payload.url.strip(), page.url)
-        else:
-            raise HTTPException(status_code=504, detail=f"Navigation timed out before the page started: {exc}")
+        raise HTTPException(status_code=504, detail="سایت هنوز پاسخ نداده است. صفحه باز می‌ماند؛ کمی صبر کنید یا دوباره تلاش کنید.") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Navigation failed: {exc}")
     tab.url = page.url
@@ -77,9 +73,8 @@ async def page_action(action: str, user: User, db: Session):
         elif action == "forward": await page.go_forward(wait_until="commit", timeout=15000)
         else: await page.reload(wait_until="commit", timeout=15000)
     except PlaywrightTimeoutError:
-        # The document may already have navigated even when a SPA does not
-        # reach the requested load milestone in time.
         logger.warning("PAGE_ACTION_COMMIT_TIMEOUT action=%s current=%s", action, page.url)
+        raise HTTPException(status_code=504, detail="بارگذاری سایت طول کشید؛ کمی صبر کنید.")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     tab.url = page.url
@@ -96,6 +91,31 @@ async def back(user: User = Depends(protected_user), db: Session = Depends(get_d
 async def forward(user: User = Depends(protected_user), db: Session = Depends(get_db)): return await page_action("forward", user, db)
 @router.post("/me/reload")
 async def reload(user: User = Depends(protected_user), db: Session = Depends(get_db)): return await page_action("reload", user, db)
+
+@router.post("/me/text")
+async def insert_unicode_text(payload: TextInputRequest, user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    """Compatibility endpoint for inserting Unicode into the user's page."""
+    if len(payload.text) > 1_000_000:
+        raise HTTPException(status_code=413, detail="Clipboard text is too large")
+    tab = own_tab(db, user)
+    page = tab_manager.get_page(tab)
+    if not page:
+        raise HTTPException(status_code=503, detail="Browser page unavailable")
+    await page.keyboard.insert_text(payload.text)
+    return {"ok": True}
+
+@router.get("/me/clipboard")
+async def read_browser_clipboard(user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    tab = own_tab(db, user)
+    page = tab_manager.get_page(tab)
+    if not page:
+        raise HTTPException(status_code=503, detail="Browser page unavailable")
+    try:
+        text = await asyncio.wait_for(selection_text(page), timeout=5)
+    except Exception as exc:
+        logger.warning("CLIPBOARD_READ_FAILED user=%s error=%s", user.username, exc)
+        text = ""
+    return {"text": text}
 
 @router.delete("/me")
 async def delete_my_tab(user: User = Depends(protected_user), db: Session = Depends(get_db)):

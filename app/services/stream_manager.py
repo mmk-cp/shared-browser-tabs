@@ -1,11 +1,12 @@
 import asyncio
-import base64
 import logging
-import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, Set
-from fastapi import WebSocket
-from playwright.async_api import CDPSession, Page
+import os
+import socket
+from dataclasses import dataclass
+from typing import Dict
+
+from playwright.async_api import Page
+
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -13,91 +14,91 @@ settings = get_settings()
 
 
 @dataclass
-class TabStream:
+class VncSession:
     page: Page
-    cdp: CDPSession | None = None
-    sockets: Set[WebSocket] = field(default_factory=set)
-    started: bool = False
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    last_frame_at: float = 0.0
+    xid: int
+    port: int
+    process: asyncio.subprocess.Process
 
 
 class StreamManager:
+    """Exports one native Chromium app window per user through local VNC."""
+
     def __init__(self) -> None:
-        self.streams: Dict[str, TabStream] = {}
+        self.streams: Dict[str, VncSession] = {}
+        self._lock = asyncio.Lock()
+        self._next_port = settings.vnc_base_port
 
-    async def ensure(self, tab_id: str, page: Page) -> TabStream:
-        stream = self.streams.get(tab_id)
-        if stream and stream.page == page and stream.started:
-            return stream
-        if stream:
-            await self.stop(tab_id)
-        stream = TabStream(page=page)
-        self.streams[tab_id] = stream
-        stream.cdp = await page.context.new_cdp_session(page)
-        stream.cdp.on("Page.screencastFrame", lambda params: asyncio.create_task(self._frame(tab_id, params)))
-        await stream.cdp.send("Page.enable")
-        await stream.cdp.send("Page.startScreencast", {
-            "format": "jpeg", "quality": settings.browser_jpeg_quality,
-            "maxWidth": settings.default_width, "maxHeight": settings.default_height,
-            "everyNthFrame": 1,
-        })
-        stream.started = True
-        return stream
+    async def ensure(self, page_id: str, page: Page, xid: int) -> VncSession:
+        current = self.streams.get(page_id)
+        if current and current.page == page and current.process.returncode is None:
+            return current
+        async with self._lock:
+            current = self.streams.get(page_id)
+            if current and current.page == page and current.process.returncode is None:
+                return current
+            if current:
+                await self.stop(page_id)
+            port = self._allocate_port()
+            args = [
+                "x11vnc", "-display", os.environ.get("DISPLAY", ":99"),
+                "-id", hex(xid), "-rfbport", str(port), "-localhost",
+                "-forever", "-shared", "-nopw", "-viewonly", "-nosel",
+                "-xrandr", "resize", "-noxdamage", "-noscr", "-quiet",
+            ]
+            process = await asyncio.create_subprocess_exec(
+                *args, stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await self._wait_for_port(port, process)
+            session = VncSession(page=page, xid=xid, port=port, process=process)
+            self.streams[page_id] = session
+            logger.info("VNC_WINDOW_STARTED page=%s xid=%s port=%s", page_id, hex(xid), port)
+            return session
 
-    async def _frame(self, tab_id: str, params: Dict[str, Any]) -> None:
-        stream = self.streams.get(tab_id)
-        if not stream:
-            return
-        try:
-            if stream.cdp:
-                await stream.cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
-            now = time.monotonic()
-            interval = 1.0 / max(1, settings.browser_fps)
-            if now - stream.last_frame_at < interval:
+    def _allocate_port(self) -> int:
+        for _ in range(1000):
+            port = self._next_port
+            self._next_port += 1
+            if self._next_port > 65000:
+                self._next_port = settings.vnc_base_port
+            with socket.socket() as probe:
+                if probe.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        raise RuntimeError("No free local VNC port")
+
+    async def _wait_for_port(self, port: int, process: asyncio.subprocess.Process) -> None:
+        for _ in range(80):
+            if process.returncode is not None:
+                raise RuntimeError(f"x11vnc exited with code {process.returncode}")
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", port)
+                writer.close()
+                await writer.wait_closed()
                 return
-            stream.last_frame_at = now
-            frame = base64.b64decode(params["data"])
-            stale = set()
-            for ws in list(stream.sockets):
-                try:
-                    await ws.send_bytes(frame)
-                except Exception:
-                    stale.add(ws)
-            stream.sockets.difference_update(stale)
-        except Exception as exc:
-            logger.debug("STREAM_FRAME_FAILED tab=%s error=%s", tab_id, exc)
+            except OSError:
+                await asyncio.sleep(0.1)
+        process.terminate()
+        raise RuntimeError("x11vnc did not start in time")
 
-    async def add_socket(self, tab_id: str, page: Page, websocket: WebSocket) -> TabStream:
-        stream = await self.ensure(tab_id, page)
-        stream.sockets.add(websocket)
-        return stream
+    async def broadcast_json(self, page_id: str, message: dict) -> None:
+        # VNC transports the window directly; navigation state is returned by
+        # the normal authenticated API rather than mixed into the RFB stream.
+        return None
 
-    async def remove_socket(self, tab_id: str, websocket: WebSocket) -> None:
-        stream = self.streams.get(tab_id)
-        if stream:
-            stream.sockets.discard(websocket)
-
-    async def broadcast_json(self, tab_id: str, message: dict) -> None:
-        stream = self.streams.get(tab_id)
-        if not stream:
-            return
-        stale = set()
-        for ws in list(stream.sockets):
+    async def stop(self, page_id: str) -> None:
+        session = self.streams.pop(page_id, None)
+        if session and session.process.returncode is None:
+            session.process.terminate()
             try:
-                await ws.send_json(message)
-            except Exception:
-                stale.add(ws)
-        stream.sockets.difference_update(stale)
+                await asyncio.wait_for(session.process.wait(), timeout=3)
+            except asyncio.TimeoutError:
+                session.process.kill()
+                await session.process.wait()
 
-    async def stop(self, tab_id: str) -> None:
-        stream = self.streams.pop(tab_id, None)
-        if stream and stream.cdp:
-            try:
-                await stream.cdp.send("Page.stopScreencast")
-                await stream.cdp.detach()
-            except Exception:
-                pass
+    async def stop_all(self) -> None:
+        for page_id in list(self.streams):
+            await self.stop(page_id)
 
 
 stream_manager = StreamManager()

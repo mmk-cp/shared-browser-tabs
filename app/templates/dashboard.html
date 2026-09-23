@@ -1,4 +1,62 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shared Browser</title><link rel="stylesheet" href="/static/css/app.css"></head>
-<body class="dashboard"><header class="topbar"><div class="brand">◈ <span>Shared Browser</span></div><div class="user-area"><span id="user-name">{{ user.username }}</span><button id="logout" class="ghost">Log out</button></div></header>
-<main class="browser-shell"><div class="browser-window"><div class="tab-strip"><div class="tab active"><span class="tab-dot"></span><span id="tab-title">Shared tab</span></div><span class="tab-plus">+</span></div><nav class="toolbar"><button data-action="back" title="Back">←</button><button data-action="forward" title="Forward">→</button><button data-action="reload" title="Reload">↻</button><form id="url-form"><span class="site-lock" aria-hidden="true">⌕</span><input id="url-input" type="url" placeholder="https://example.com" autocomplete="off"><button class="go" type="submit">Go</button></form></nav><div id="status" class="status">Connecting to your tab…</div><section id="viewport" class="viewport" tabindex="0"><canvas id="screen" aria-label="Live browser tab"></canvas><div id="empty" class="empty">Loading browser tab…</div></section></div></main><script src="/static/js/dashboard.js"></script></body></html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>مرورگر مشترک</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="dashboard">
+  <main id="workspace" class="workspace">
+    <section class="remote-shell" aria-label="مرورگر راه دور">
+      <div id="vnc-screen" class="vnc-screen" tabindex="0"></div>
+      <textarea id="mobile-input" class="mobile-input" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="کیبورد مرورگر" placeholder="اینجا تایپ کنید…"></textarea>
+      <div id="connection-state" class="connection-state">
+        <span class="spinner"></span><span>در حال اتصال به مرورگر…</span>
+      </div>
+    </section>
+
+    <aside class="side-rail" aria-label="ابزارها">
+      <button id="url-toggle" class="rail-button" title="باز کردن آدرس" aria-label="باز کردن آدرس">⌕</button>
+      <button id="reload" class="rail-button" title="بارگذاری مجدد" aria-label="بارگذاری مجدد">↻</button>
+      <button id="clipboard-toggle" class="rail-button" title="کپی و پیست" aria-label="کپی و پیست">▣</button>
+      <button id="keyboard-toggle" class="rail-button" title="کیبورد" aria-label="کیبورد">⌨</button>
+      <button id="maximize" class="rail-button" title="بزرگ کردن نمایشگر" aria-label="بزرگ کردن نمایشگر">⛶</button>
+      <span class="rail-spacer"></span>
+      <span id="online-dot" class="online-dot" title="وضعیت اتصال"></span>
+      <button id="logout" class="rail-button danger" title="خروج" aria-label="خروج">↪</button>
+    </aside>
+    <button id="restore-tools" title="نمایش ابزارها" aria-label="نمایش ابزارها">‹</button>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <nav id="context-menu" class="context-menu" aria-label="منوی راست‌کلیک" hidden>
+      <button data-command="copy">کپی متن انتخاب‌شده <kbd>Ctrl+C</kbd></button>
+      <button data-command="paste">چسباندن <kbd>Ctrl+V</kbd></button>
+      <button data-command="select_all">انتخاب همه <kbd>Ctrl+A</kbd></button>
+      <button data-command="open_link" hidden>باز کردن پیوند</button>
+      <button data-command="copy_link" hidden>کپی آدرس پیوند</button>
+      <hr>
+      <button data-command="back">بازگشت</button>
+      <button data-command="reload">بارگذاری مجدد</button>
+    </nav>
+
+    <form id="url-panel" class="floating-panel url-panel" autocomplete="off">
+      <label for="url-input">آدرس سایت</label>
+      <div class="url-row">
+        <input id="url-input" type="text" inputmode="url" dir="ltr" placeholder="example.com">
+        <button type="submit" class="accent-button">باز کن</button>
+      </div>
+    </form>
+
+    <section id="clipboard-panel" class="floating-panel clipboard-panel">
+      <label for="clipboard-text">کلیپ‌بورد</label>
+      <textarea id="clipboard-text" rows="5" dir="auto" placeholder="متن فارسی یا انگلیسی را اینجا Paste کنید"></textarea>
+      <div class="panel-actions">
+        <button id="send-clipboard" type="button" class="accent-button">ارسال و Paste</button>
+        <button id="copy-clipboard" type="button" class="secondary-button">کپی متن انتخاب‌شده</button>
+      </div>
+      <small>می‌توانید مستقیماً داخل مرورگر هم با Ctrl+V پیست کنید.</small>
+    </section>
+  </main>
+  <script type="module" src="/static/js/dashboard.js"></script>
+</body>
+</html>

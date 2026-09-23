@@ -38,7 +38,12 @@ class TabManager:
                 logger.debug("NAVIGATION_EVENT_FAILED tab=%s error=%s", tab.id, exc)
 
         async def closed(_page=None):
+            if self.browser.get_page(tab.page_id) != page:
+                return
             self.browser.pages.pop(tab.page_id, None)
+            self.browser.window_ids.pop(tab.page_id, None)
+            self.browser.window_slots.pop(tab.page_id, None)
+            self.browser.window_sizes.pop(tab.page_id, None)
             await self.streams.stop(tab.page_id)
 
         page.on("framenavigated", navigated)
