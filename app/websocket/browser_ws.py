@@ -11,6 +11,7 @@ from app.services.tab_manager import tab_manager
 from app.services.stream_manager import stream_manager
 from app.services.input_manager import handle_input
 from app.services.input_buffer import InputBuffer
+from app.services.clipboard_bridge import clipboard_bridge
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,6 +45,16 @@ async def input_socket(websocket: WebSocket):
         return
     await websocket.accept()
     buffer = InputBuffer()
+    clipboard_events = clipboard_bridge.subscribe(page)
+
+    async def forward_clipboard():
+        while True:
+            text = await clipboard_events.get()
+            # An old socket must never receive a new session's clipboard.
+            if not await authenticated_user(websocket):
+                await websocket.close(code=4401, reason="Session ended")
+                return
+            await websocket.send_json({"type": "clipboard", "text": text})
 
     async def receive_events():
         while True:
@@ -63,6 +74,7 @@ async def input_socket(websocket: WebSocket):
                 if event.get("type") == "resize":
                     result = await tab_manager.browser.resize_page(page_id, int(event["width"]), int(event["height"]))
                 else:
+                    clipboard_bridge.interacted(page, event)
                     result = await asyncio.wait_for(handle_input(page, event), timeout=8)
                 if event.get("id") is not None:
                     await websocket.send_json({"id": event["id"], "result": result})
@@ -75,6 +87,7 @@ async def input_socket(websocket: WebSocket):
         asyncio.create_task(watch_session(websocket)),
         asyncio.create_task(receive_events()),
         asyncio.create_task(apply_events()),
+        asyncio.create_task(forward_clipboard()),
     }
     try:
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -84,6 +97,7 @@ async def input_socket(websocket: WebSocket):
             except WebSocketDisconnect:
                 pass
     finally:
+        clipboard_bridge.unsubscribe(page, clipboard_events)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

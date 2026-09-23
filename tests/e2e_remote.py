@@ -140,7 +140,12 @@ async def main():
             await remotes[0].wait_for_function("document.querySelector('#editor').value==='سلام فارسی English 123'")
             await views[0].keyboard.press('Control+a')
             await views[0].keyboard.press('Control+c')
-            await views[0].wait_for_function("navigator.clipboard.readText().then(t=>t==='سلام فارسی English 123')")
+            for _ in range(100):
+                if await views[0].evaluate('navigator.clipboard.readText()') == 'سلام فارسی English 123':
+                    break
+                await asyncio.sleep(.05)
+            else:
+                raise AssertionError('Selected remote text did not reach the local clipboard')
             print('PASS Persian typing and copy to local clipboard', flush=True)
             await views[0].evaluate("navigator.clipboard.writeText('چسباندن فارسی + Paste')")
             await views[0].keyboard.press('Control+v')

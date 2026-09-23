@@ -29,6 +29,7 @@ The browser fills the page. A slim toolbar on the right provides URL entry, relo
 - Right-click opens a viewer menu with copy, paste, select all, link actions, back and reload. It replaces the native Chromium menu, which is a separate X11 window and cannot be captured reliably by a single-window VNC stream.
 - On phones, tap and swipe to click and scroll; long-press opens the context menu. Tap the keyboard button to type using the phone's keyboard. Site layout adapts to the viewer width.
 - Clipboard access depends on the local browser's permissions. HTTPS (or localhost) is needed for automatic system-clipboard access. The clipboard panel is the fallback: paste there and send, or copy the selected remote text from the panel.
+- Site Copy buttons are also relayed: text from `navigator.clipboard.writeText`, text ClipboardItems and legacy `execCommand('copy')` is delivered to that user's viewer, including child frames and after navigation. The focused viewer tries to write it to the device clipboard. If permissions or browser activation rules prevent this, the text appears in the panel; click **کپی در دستگاه من** (Copy to my device), or manually copy the selected text. The explicit button includes a legacy fallback for plain HTTP. A site's own “Copied” indicator means it handed text to the viewer; use the viewer's confirmation to know whether the device clipboard was updated.
 
 Noto Arabic, Latin and emoji fonts are installed in Chromium. The application's Arabic and Latin fonts are also served locally, without a third-party font CDN.
 
@@ -37,6 +38,8 @@ Noto Arabic, Latin and emoji fonts are installed in Chromium. The application's 
 `BrowserManager` starts system Chromium under Xvfb and creates an app-mode window for each database tab. All windows belong to the same browser context. `StreamManager` exports each native X11 window with x11vnc; noVNC renders its Tight-compressed RFB updates over an authenticated WebSocket. There is no CDP JPEG screenshot loop.
 
 The VNC servers bind to container loopback, run **view-only**, and disable the shared X11 clipboard. Inputs travel on a separate ordered WebSocket targeted at the authenticated Playwright Page. This avoids X11's single global focus allowing one user to type into another user's window. Copy reads only the selection in that user's page, not a desktop-wide clipboard. Clients cannot choose a page ID or VNC port. Both WebSocket routes check session, account status and same-origin headers.
+
+Site-copy transport uses a per-Page binding and a bounded, ephemeral queue for that page's authenticated input sockets; it never reads the shared X11 clipboard. It requires input to that page within the previous five seconds. Old sessions are revalidated before delivery, and background viewers don't automatically overwrite the local clipboard. Text is limited to one million characters. Rich HTML is reduced to text; images/files and sites that bypass or replace the injected clipboard methods are not supported by this relay. Local clipboard reads are still explicit paste actions, not a background synchronization service.
 
 ### Responsiveness
 
@@ -59,6 +62,8 @@ Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled
 ```sh
 docker compose exec -T app python -m tests.e2e_remote
 docker compose exec -T app python -m tests.e2e_accounts
+docker compose exec -T app python -m tests.e2e_clipboard
+docker compose exec -T app python -m unittest tests.test_clipboard_bridge
 docker compose exec -T app python -m unittest tests.test_input_buffer
 docker compose exec -T app python -m tests.benchmark_latency --idle-seconds 65
 curl -fsS http://localhost:8000/health

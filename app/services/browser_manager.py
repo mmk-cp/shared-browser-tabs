@@ -8,6 +8,7 @@ from urllib.parse import quote
 from typing import Dict, Optional
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
 from app.config import get_settings
+from app.services.clipboard_bridge import clipboard_bridge
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -242,6 +243,7 @@ class BrowserManager:
         self.window_ids[page_id] = xid
         self.window_slots[page_id] = slot
         await self.resize_page(page_id, settings.vnc_view_width, settings.vnc_view_height)
+        await clipboard_bridge.attach(page)
         if url and url != "about:blank":
             try:
                 # Startup does not wait for all subresources to load.

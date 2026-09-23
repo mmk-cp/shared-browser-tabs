@@ -109,7 +109,12 @@ async function connect() {
     const base = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
     input = new WebSocket(`${base}/ws/input`);
     input.onmessage = event => {
-      const message = JSON.parse(event.data), job = pending.get(message.id);
+      const message = JSON.parse(event.data);
+      if (message.type === 'clipboard' && typeof message.text === 'string') {
+        writeLocal(message.text, {site:true});
+        return;
+      }
+      const job = pending.get(message.id);
       if (job) { clearTimeout(job.timer); pending.delete(message.id); message.error ? job.reject(Error(message.error)) : job.resolve(message.result); }
     };
     await new Promise((resolve,reject) => { input.onopen = resolve; input.onerror = () => reject(Error('اتصال ورودی برقرار نشد')); });
@@ -164,13 +169,20 @@ async function copyRemote() {
   const result = await command({type:'copy'});
   return result?.text || '';
 }
-async function writeLocal(text) {
+async function writeLocal(text, {site = false} = {}) {
   if (!text) { notify('ابتدا متن را انتخاب کنید'); return; }
   $('clipboard-text').value = text;
-  try { await navigator.clipboard.writeText(text); notify('متن کپی شد'); }
+  try {
+    // A background viewer may retain the text for an explicit copy, but must
+    // not overwrite the clipboard while the user works in another app/tab.
+    if (site && (!document.hasFocus() || document.visibilityState !== 'visible')) throw Error('Viewer is not focused');
+    await navigator.clipboard.writeText(text);
+    notify('متن در کلیپ‌بورد دستگاه شما کپی شد');
+  }
   catch {
-    clipboardPanel.classList.add('open'); $('clipboard-text').focus(); $('clipboard-text').select();
-    notify('متن آماده است؛ از این کادر کپی کنید');
+    clipboardPanel.classList.add('open'); $('clipboard-toggle').classList.add('active');
+    if (document.hasFocus()) { $('clipboard-text').focus(); $('clipboard-text').select(); }
+    notify('متن دریافت شد؛ برای انتقال به دستگاه، «کپی در دستگاه من» را بزنید');
   }
 }
 async function pasteLocal() {
@@ -182,6 +194,22 @@ $('send-clipboard').onclick = async () => {
   catch (error) { notify(error.message); }
 };
 $('copy-clipboard').onclick = async () => { try { await writeLocal(await copyRemote()); } catch(error) { notify(error.message); } };
+$('copy-local-clipboard').onclick = async () => {
+  const field = $('clipboard-text'), text = field.value;
+  if (!text) { notify('هنوز متنی برای کپی دریافت نشده است'); return; }
+  try {
+    // Called directly from a local click for browsers requiring activation.
+    await navigator.clipboard.writeText(text);
+    notify('متن در کلیپ‌بورد دستگاه شما کپی شد');
+  } catch {
+    field.focus(); field.select();
+    // Explicit-user-action fallback for deployments on plain HTTP.
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch { /* Manual copy remains available. */ }
+    if (copied) notify('متن در کلیپ‌بورد دستگاه شما کپی شد');
+    else notify('متن انتخاب شده است؛ Ctrl+C یا گزینهٔ Copy گوشی را بزنید');
+  }
+};
 
 // Client-side context menu: native Chromium popup windows are not part of
 // the exported X11 window. Selection and clipboard stay scoped to this tab.
