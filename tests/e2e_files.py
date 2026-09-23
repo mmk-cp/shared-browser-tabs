@@ -14,7 +14,7 @@ from playwright.async_api import async_playwright
 from app.db import SessionLocal
 from app.models import User, BrowserTab
 from app.services.auth_service import hash_password
-from tests.e2e_remote import Remote
+from tests.e2e_remote import Remote, navigate_fixture
 
 HTML = '''<!doctype html><meta charset=utf-8>
 <style>body{padding:24px;font:18px sans-serif;background:#eef3fa}button,input{padding:14px;margin:12px}#editor{padding:20px;border:1px solid;height:90px}iframe{height:90px}</style>
@@ -69,7 +69,7 @@ async def main():
                 client.headers['X-CSRF-Token'] = client.cookies['shared_browser_csrf']
                 (await client.get('/api/tabs/me')).raise_for_status()
                 url = f'http://127.0.0.1:{fixture.server_port}/{name}'
-                (await client.post('/api/tabs/me/navigate', json={'url':url})).raise_for_status()
+                await navigate_fixture(client, url)
                 context = await browser.new_context(viewport={'width':1200,'height':900}, permissions=['clipboard-read','clipboard-write'])
                 await context.add_cookies([{'name':k,'value':v,'url':'http://127.0.0.1:8000'} for k,v in client.cookies.items()])
                 view = await context.new_page()

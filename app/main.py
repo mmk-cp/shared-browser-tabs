@@ -26,7 +26,7 @@ async def restore_browser_tabs():
     with SessionLocal() as restore_db:
         await tab_module.tab_manager.restore_pages(restore_db)
 browser_manager.restore_callback = restore_browser_tabs
-from app.api import auth, browser, tabs, users
+from app.api import auth, browser, tabs, users, sites
 from app.websocket import browser_ws
 
 
@@ -53,6 +53,7 @@ app.include_router(auth.router)
 app.include_router(browser.router)
 app.include_router(tabs.router)
 app.include_router(users.router)
+app.include_router(sites.router)
 app.include_router(browser_ws.router)
 
 
@@ -112,3 +113,12 @@ async def admin_page(request: Request):
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Administrator access required")
     return templates.TemplateResponse("admin.html", {"request": request, "user": user})
+
+
+@app.get('/admin/sites', response_class=HTMLResponse)
+async def sites_admin_page(request: Request):
+    with SessionLocal() as db:
+        user = get_user_from_request(request, db)
+    if not user: return RedirectResponse('/login')
+    if not user.is_admin: raise HTTPException(403, 'Administrator access required')
+    return templates.TemplateResponse('sites_admin.html', {'request':request, 'user':user})

@@ -1,14 +1,14 @@
 import asyncio
 import logging
 from urllib.parse import urlparse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.requests import ClientDisconnect
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
-from app.api.deps import current_user, protected_user
+from app.api.deps import current_user, protected_user, protected_admin
 from app.db import get_db, SessionLocal
-from app.models import User, BrowserTab
+from app.models import User, BrowserTab, Site
 from app.services.tab_manager import tab_manager
 from app.services.input_manager import selection_text
 from app.services.auth_service import SESSION_COOKIE, get_user_from_token
@@ -44,8 +44,26 @@ class TextInputRequest(BaseModel):
     text: str
 
 @router.post("/me/navigate")
-async def navigate(payload: NavigateRequest, user: User = Depends(protected_user), db: Session = Depends(get_db)):
-    parsed = urlparse(payload.url.strip())
+async def navigate(payload: NavigateRequest, user: User = Depends(protected_admin), db: Session = Depends(get_db)):
+    return await navigate_page(payload.url, user, db)
+
+
+class SiteSelection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    site_id: int = Field(gt=0, le=9223372036854775807, strict=True)
+
+
+@router.post('/me/open-site')
+async def open_site(payload: SiteSelection, user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    site = db.get(Site, payload.site_id)
+    if not site or not site.is_active:
+        raise HTTPException(404, 'این سایت حذف یا غیرفعال شده است؛ فهرست را تازه‌سازی کنید.')
+    # Resolve the URL exclusively on the server; clients send only an ID.
+    return await navigate_page(site.url, user, db)
+
+
+async def navigate_page(url: str, user: User, db: Session):
+    parsed = urlparse(url.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Only http(s) URLs are allowed")
     tab = own_tab(db, user)
@@ -55,7 +73,7 @@ async def navigate(payload: NavigateRequest, user: User = Depends(protected_user
         page = tab_manager.get_page(tab)
     try:
         # Respond when the document starts; subresources can load afterwards.
-        await page.goto(payload.url.strip(), wait_until="commit", timeout=15000)
+        await page.goto(url.strip(), wait_until="commit", timeout=15000)
     except PlaywrightTimeoutError as exc:
         raise HTTPException(status_code=504, detail="سایت هنوز پاسخ نداده است. صفحه باز می‌ماند؛ کمی صبر کنید یا دوباره تلاش کنید.") from exc
     except Exception as exc:

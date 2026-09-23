@@ -28,9 +28,9 @@ Startup adds the nullable `users.session_id` column to existing databases withou
 
 ## Using the browser
 
-The browser fills the page. A slim toolbar on the right provides URL entry, reload, clipboard, a mobile keyboard and a focus mode that hides the toolbar. Focus mode changes only this viewer, without entering the device/browser fullscreen mode. The small edge arrow restores the toolbar.
+The browser fills the page. A slim toolbar on the right provides a site picker (with manual URL entry for admins only), reload, clipboard, downloads, a mobile keyboard and a focus mode that hides the toolbar. Focus mode changes only this viewer, without entering the device/browser fullscreen mode. The small edge arrow restores the toolbar.
 
-- Enter a URL in the popover, then use the page directly.
+- Select a card in the **انتخاب سایت** popover, then use the page directly. Admins can also enter a custom URL there.
 - Type Persian or English. Ctrl+A/C/V, text selection, double-click and drag are supported.
 - Right-click opens a viewer menu with copy, paste, select all, link actions, back and reload. It replaces the native Chromium menu, which is a separate X11 window and cannot be captured reliably by a single-window VNC stream.
 - On phones, tap and swipe to click and scroll; long-press opens the context menu. Tap the keyboard button to type using the phone's keyboard. Site layout adapts to the viewer width.
@@ -38,6 +38,16 @@ The browser fills the page. A slim toolbar on the right provides URL entry, relo
 - Site Copy buttons are also relayed: text from `navigator.clipboard.writeText`, text ClipboardItems and legacy `execCommand('copy')` is delivered to that user's viewer, including child frames and after navigation. The focused viewer tries to write it to the device clipboard. If permissions or browser activation rules prevent this, the text appears in the panel; click **کپی در دستگاه من** (Copy to my device), or manually copy the selected text. The explicit button includes a legacy fallback for plain HTTP. A site's own “Copied” indicator means it handed text to the viewer; use the viewer's confirmation to know whether the device clipboard was updated.
 
 Noto Arabic, Latin and emoji fonts are installed in Chromium. The application's Arabic and Latin fonts are also served locally, without a third-party font CDN.
+
+### Admin-managed sites
+
+Open **مدیریت سایت‌ها** from `/admin`, or go to `/admin/sites`. Admins can add, edit, hide/reactivate and delete catalog entries. Each entry has a required title (up to 80 characters), a complete HTTP(S) URL (up to 2048 characters, no embedded username/password), and an optional emoji/short text icon (up to 16 characters). The icon chooser and live card preview work on mobile too. Without an icon, the title's first character is used. Icons render as text; no remote favicons, external image requests, HTML or SVG uploads are used.
+
+Regular users see searchable, keyboard-accessible cards, never the manual URL form. `Ctrl/Cmd+L` opens the picker. A blank/new browser opens the picker automatically; choosing a site closes it and restores the browser area. The catalog refreshes whenever the picker is opened; empty, no-match, loading and error states are displayed explicitly.
+
+This is enforced server-side: `POST /api/tabs/me/navigate` is admin-only. Members use `POST /api/tabs/me/open-site` with **only `site_id`**; the server resolves its current URL and rejects hidden/deleted entries and extra URL fields. `GET /api/sites` lists active entries to signed-in users. `/api/sites/manage` and all catalog mutations require admin authorization; writes additionally require CSRF. Direct API calls cannot bypass these role checks. Deleting the highest-numbered entry does not recycle its ID on SQLite.
+
+The `sites` table is created additively on startup. Existing users, sessions, browser tabs, cookies and profile data are preserved; no demo sites are inserted. Existing tabs are not closed when a catalog entry is hidden or deleted. **This is a launcher/manual-address policy, not a domain/network allowlist or a locked-down kiosk**: links inside sites, redirects, sign-in flows, history and already-open pages remain usable. Enforcing a domain allowlist would require a separate navigation/network policy and could affect login, uploads and third-party resources.
 
 ## Transport and isolation
 
@@ -95,6 +105,8 @@ docker compose exec -T app python -m tests.e2e_accounts
 docker compose exec -T app python -m tests.e2e_registration
 docker compose exec -T app python -m tests.e2e_clipboard
 docker compose exec -T app python -m tests.e2e_files
+docker compose exec -T app timeout 150s python -m tests.e2e_sites
+docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_sites'
 docker compose exec -T app timeout 150s python -m tests.e2e_downloads
 docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_downloads'
 docker compose exec -T app python -m unittest tests.test_file_transfer

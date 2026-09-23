@@ -15,7 +15,7 @@ import websockets
 from playwright.async_api import async_playwright
 
 from app.db import SessionLocal
-from app.models import User, BrowserTab
+from app.models import User, BrowserTab, Site
 from app.services.auth_service import hash_password
 
 FIXTURE = """<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>
@@ -75,6 +75,20 @@ class Remote:
         raise AssertionError(f'Timed out: {expression}')
 
 
+async def navigate_fixture(client, url):
+    """Seed a short-lived catalog entry; regular QA users follow production policy."""
+    with SessionLocal() as db:
+        site=Site(title='Temporary QA fixture',url=url)
+        db.add(site); db.commit(); site_id=site.id
+    try:
+        response=await client.post('/api/tabs/me/open-site',json={'site_id':site_id})
+        response.raise_for_status()
+        return response
+    finally:
+        with SessionLocal() as db:
+            db.query(Site).filter(Site.id==site_id).delete(); db.commit()
+
+
 async def main():
     fixture = ThreadingHTTPServer(('127.0.0.1', 0), FixtureHandler)
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
@@ -101,7 +115,7 @@ async def main():
                 client.headers['X-CSRF-Token'] = client.cookies['shared_browser_csrf']
                 (await client.get('/api/tabs/me')).raise_for_status()
                 url = f'{fixture_base}/user-{i}'
-                (await client.post('/api/tabs/me/navigate', json={'url':url})).raise_for_status()
+                await navigate_fixture(client, url)
                 context = await test_browser.new_context(viewport={'width':1366, 'height':900}, permissions=['clipboard-read','clipboard-write'])
                 await context.add_cookies([{'name':k,'value':v,'url':'http://127.0.0.1:8000'} for k,v in client.cookies.items()])
                 view = await context.new_page()

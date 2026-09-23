@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>مدیریت سایت‌ها · مرورگر مشترک</title><link rel="stylesheet" href="/static/css/app.css"></head>
+<body class="admin-page">
+<main class="admin-shell">
+  <header class="admin-header">
+    <div><p class="admin-eyebrow">مرورگر مشترک</p><h1>مدیریت سایت‌ها</h1><p class="muted">مقصدهای آماده برای کاربران شما</p></div>
+    <nav class="admin-actions" aria-label="ابزارهای مدیریت">
+      <a class="secondary-button" href="/admin">مدیریت کاربران</a>
+      <a class="secondary-button" href="/dashboard">بازگشت به مرورگر</a>
+    </nav>
+  </header>
+  <p class="session-notice">کاربران فقط از این فهرست سایت انتخاب می‌کنند؛ ورود آدرس دستی مخصوص ادمین است. لینک‌های داخل سایت‌ها همچنان قابل استفاده‌اند.</p>
+  <div class="admin-grid">
+    <section class="admin-card" aria-labelledby="site-form-heading">
+      <h2 id="site-form-heading">افزودن سایت</h2>
+      <form id="site-form">
+        <label for="site-title">عنوان سایت</label>
+        <input id="site-title" required maxlength="80" dir="auto" placeholder="مثلاً دستیار هوشمند">
+        <label for="site-url">آدرس سایت</label>
+        <input id="site-url" required type="url" maxlength="2048" dir="ltr" placeholder="https://example.com" autocomplete="off">
+        <small>آدرس کامل با https:// یا http://؛ بدون نام کاربری و رمز در آدرس.</small>
+        <label for="site-icon">آیکون اختیاری</label>
+        <input id="site-icon" maxlength="16" dir="auto" placeholder="یک ایموجی یا نشان کوتاه، مثلاً 🤖 یا AI">
+        <div id="icon-choices" class="icon-choices" role="group" aria-label="انتخاب سریع آیکون"></div>
+        <small>بدون آیکون، حرف اول عنوان نمایش داده می‌شود. هیچ تصویر خارجی بارگذاری نمی‌شود.</small>
+        <label class="checkbox-label"><input id="site-active" type="checkbox" checked> نمایش در فهرست کاربران</label>
+        <div class="site-preview"><small>پیش‌نمایش کارت کاربر</small><div id="site-preview"></div></div>
+        <div class="panel-actions"><button id="save-site" class="accent-button" type="submit">افزودن سایت</button><button id="cancel-site-edit" class="secondary-button" type="button" hidden>لغو ویرایش</button></div>
+        <p id="site-form-message" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section class="admin-card" aria-labelledby="site-list-heading">
+      <div class="users-heading"><h2 id="site-list-heading">سایت‌ها <span id="site-total" class="count-badge">۰</span></h2><button id="reload-site-list" class="secondary-button">تازه‌سازی</button></div>
+      <label for="manage-site-search">جست‌وجوی سایت</label><input id="manage-site-search" type="search" placeholder="نام سایت یا دامنه…">
+      <p id="site-list-message" class="form-message" role="status"></p>
+      <ul id="manage-sites" class="managed-sites" aria-label="فهرست سایت‌ها"></ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="/static/js/sites_admin.js"></script>
+</body></html>

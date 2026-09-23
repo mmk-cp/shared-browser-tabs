@@ -1,6 +1,7 @@
 import RFB from '/novnc/core/rfb.js';
 import {createTransfers} from './transfers.js';
 import {createDownloads} from './downloads.js';
+import {createSitePicker} from './sites.js';
 
 // Keep noVNC 1.6's encoding negotiation compatible with x11vnc's -id mode.
 // DesktopSize is required when the browser is resized, including on phones.
@@ -21,13 +22,20 @@ const $ = id => document.getElementById(id);
 const screen = $('vnc-screen'), workspace = $('workspace'), state = $('connection-state');
 const urlPanel = $('url-panel'), clipboardPanel = $('clipboard-panel'), menu = $('context-menu');
 const mobileInput = $('mobile-input');
+const isAdmin = document.body.dataset.admin === 'true';
 let rfb, input, reconnectTimer, resizeTimer, toastTimer, requestId = 0;
 let remoteSize = {width:1600, height:900}, context = {}, lastUrl = '';
 let stopped = false, connected = false, composing = false;
+let navigating = false;
 const pending = new Map();
 const csrf = () => decodeURIComponent(document.cookie.split('; ').find(x => x.startsWith('shared_browser_csrf='))?.split('=')[1] || '');
 const transfers = createTransfers({command, api, notify, screen, closePanels});
 const downloadUI = createDownloads({csrf, api, notify, screen, closePanels});
+const sitePicker = createSitePicker({api, onOpen: async site => {
+  const tab = await api('/api/tabs/me/open-site', {method:'POST',body:JSON.stringify({site_id:site.id})});
+  lastUrl = tab.url; if ($('url-input')) $('url-input').value = lastUrl;
+  closePanels(); screen.focus(); notify(`«${site.title}» باز شد.`);
+}});
 
 function sessionEnded() {
   stopped = true; connected = false;
@@ -74,11 +82,13 @@ function closePanels() {
   downloadUI.closePanel();
   urlPanel.classList.remove('open'); clipboardPanel.classList.remove('open');
   $('url-toggle').classList.remove('active'); $('clipboard-toggle').classList.remove('active');
+  $('url-toggle').setAttribute('aria-expanded','false');
   menu.hidden = true;
 }
 function togglePanel(panel, button) {
   const open = !panel.classList.contains('open'); closePanels();
   panel.classList.toggle('open', open); button.classList.toggle('active', open);
+  if (panel === urlPanel) { button.setAttribute('aria-expanded',String(open)); if(open) sitePicker.load(); }
   if (open) panel.querySelector('input,textarea').focus();
   else screen.focus();
 }
@@ -110,7 +120,7 @@ async function connect() {
   try {
     const tab = await api('/api/tabs/me');
     lastUrl = /^https?:/.test(tab.url) ? tab.url : '';
-    $('url-input').value = lastUrl;
+    if ($('url-input')) $('url-input').value = lastUrl;
     const base = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
     input = new WebSocket(`${base}/ws/input`);
     input.onmessage = event => {
@@ -145,13 +155,15 @@ async function connect() {
 }
 
 async function navigate(url) {
+  if (!isAdmin || navigating) return;
+  navigating = true;
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   $('url-panel').classList.add('loading');
   try {
     const tab = await api('/api/tabs/me/navigate', {method:'POST', body:JSON.stringify({url})});
     lastUrl = tab.url; $('url-input').value = lastUrl; closePanels(); screen.focus();
   } catch (error) { notify(error.message); }
-  finally { $('url-panel').classList.remove('loading'); }
+  finally { navigating = false; $('url-panel').classList.remove('loading'); }
 }
 async function pageAction(action) {
   try { await api(`/api/tabs/me/${action}`, {method:'POST'}); screen.focus(); }
@@ -160,7 +172,8 @@ async function pageAction(action) {
 $('url-toggle').onclick = () => togglePanel(urlPanel, $('url-toggle'));
 $('clipboard-toggle').onclick = () => togglePanel(clipboardPanel, $('clipboard-toggle'));
 $('reload').onclick = () => pageAction('reload');
-urlPanel.onsubmit = event => { event.preventDefault(); if ($('url-input').value.trim()) navigate($('url-input').value.trim()); };
+if ($('manual-url-form')) $('manual-url-form').onsubmit = event => { event.preventDefault(); if ($('url-input').value.trim()) navigate($('url-input').value.trim()); };
+$('close-sites').onclick = () => { closePanels(); screen.focus(); };
 $('maximize').onclick = () => { closePanels(); workspace.classList.add('focus-mode'); scheduleResize(); };
 $('restore-tools').onclick = () => { workspace.classList.remove('focus-mode'); scheduleResize(); };
 $('keyboard-toggle').onclick = () => {
@@ -235,7 +248,7 @@ async function showContext(x, y, point) {
   try { context = await command({type:'context', ...point}); }
   catch (error) { notify(error.message); return; }
   menu.querySelector('[data-command=copy]').disabled = !context.text;
-  menu.querySelector('[data-command=open_link]').hidden = !context.href;
+  menu.querySelector('[data-command=open_link]').hidden = !isAdmin || !context.href;
   menu.querySelector('[data-command=copy_link]').hidden = !context.href;
   menu.hidden = false;
   menu.style.left = `${Math.max(4, Math.min(x, innerWidth-menu.offsetWidth-4))}px`;
@@ -352,7 +365,7 @@ mobileInput.addEventListener('beforeinput', event => {
   }
 });
 document.addEventListener('pointerdown', event => { if(!event.target.closest('.floating-panel,.side-rail,.context-menu,#mobile-input')) closePanels(); });
-document.addEventListener('keydown', event => { if(event.key==='Escape') closePanels(); });
+document.addEventListener('keydown', event => { if(event.key==='Escape') { closePanels(); screen.focus({preventScroll:true}); } });
 new ResizeObserver(scheduleResize).observe(screen);
 function viewportHeight() { workspace.style.height = `${window.visualViewport?.height || innerHeight}px`; scheduleResize(); }
 window.visualViewport?.addEventListener('resize',viewportHeight);

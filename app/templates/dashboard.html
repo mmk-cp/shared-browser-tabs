@@ -6,7 +6,7 @@
   <title>مرورگر مشترک</title>
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body class="dashboard">
+<body class="dashboard" data-admin="{{ 'true' if user.is_admin else 'false' }}">
   <main id="workspace" class="workspace">
     <section class="remote-shell" aria-label="مرورگر راه دور">
       <div id="vnc-screen" class="vnc-screen" tabindex="0"></div>
@@ -17,7 +17,7 @@
     </section>
 
     <aside class="side-rail" aria-label="ابزارها">
-      <button id="url-toggle" class="rail-button" title="باز کردن آدرس" aria-label="باز کردن آدرس">⌕</button>
+      <button id="url-toggle" class="rail-button" title="انتخاب سایت" aria-label="انتخاب سایت" aria-controls="url-panel" aria-expanded="false">▦</button>
       <button id="reload" class="rail-button" title="بارگذاری مجدد" aria-label="بارگذاری مجدد">↻</button>
       <button id="clipboard-toggle" class="rail-button" title="کپی و پیست" aria-label="کپی و پیست">▣</button>
       <button id="downloads-toggle" class="rail-button" title="دانلودها" aria-label="دانلودها">↓</button>
@@ -50,13 +50,22 @@
       <ul id="downloads-list" aria-live="polite"></ul>
       <small>هر فایل حداکثر ۱۰۰ مگابایت. نسخهٔ موقت سرور بعد از انتقال یا لغو پاک می‌شود. لینک ذخیرهٔ محلی تا ۵ دقیقه فعال است.</small>
     </section>
-    <form id="url-panel" class="floating-panel url-panel" autocomplete="off">
-      <label for="url-input">آدرس سایت</label>
-      <div class="url-row">
-        <input id="url-input" type="text" inputmode="url" dir="ltr" placeholder="example.com">
-        <button type="submit" class="accent-button">باز کن</button>
-      </div>
-    </form>
+    <section id="url-panel" class="floating-panel url-panel sites-panel" aria-labelledby="sites-heading">
+      <div class="sites-heading"><div><span class="admin-eyebrow">فضای کاری شما</span><h2 id="sites-heading">کجا می‌خواهید بروید؟</h2></div><button id="close-sites" class="secondary-button" aria-label="بستن انتخاب سایت">×</button></div>
+      <p class="sites-help">یک سایت را انتخاب کنید؛ ادامهٔ کار در همین مرورگر باز می‌شود.</p>
+      {% if user.is_admin %}
+      <form id="manual-url-form" autocomplete="off">
+        <label for="url-input">آدرس دلخواه <span class="count-badge">فقط ادمین</span></label>
+        <div class="url-row"><input id="url-input" type="text" inputmode="url" dir="ltr" placeholder="https://example.com"><button type="submit" class="accent-button">باز کن</button></div>
+      </form>
+      {% endif %}
+      <div class="sites-tools"><label for="site-search">سایت‌های آماده <span id="sites-count" class="count-badge">۰</span></label><button id="refresh-sites" class="secondary-button" type="button">تازه‌سازی</button></div>
+      <input id="site-search" type="search" placeholder="جست‌وجوی نام سایت…" autocomplete="off">
+      <p id="site-message" class="form-message" role="status" aria-live="polite"></p>
+      <div id="site-grid" class="site-grid" aria-label="انتخاب سایت"></div>
+      <p id="sites-empty" class="sites-empty" hidden></p>
+      {% if user.is_admin %}<a href="/admin/sites" class="manage-sites-link">＋ افزودن یا مدیریت سایت‌ها</a>{% endif %}
+    </section>
 
     <section id="clipboard-panel" class="floating-panel clipboard-panel">
       <label for="clipboard-text">کلیپ‌بورد</label>

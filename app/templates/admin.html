@@ -11,6 +11,7 @@
     <header class="admin-header">
       <div><p class="admin-eyebrow">مرورگر مشترک</p><h1>مدیریت کاربران</h1><p class="muted">ورود به‌عنوان {{ user.username }}</p></div>
       <nav class="admin-actions" aria-label="ابزارهای مدیریت">
+        <a class="accent-button" href="/admin/sites">مدیریت سایت‌ها</a>
         <a class="secondary-button" href="/dashboard">بازگشت به مرورگر</a>
         <a class="secondary-button" href="/account">تغییر رمز عبور</a>
         <button class="secondary-button" id="admin-logout">خروج</button>
@@ -27,7 +28,7 @@
           <label for="new-password">رمز عبور</label>
           <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="password-help">
           <small id="password-help">حداقل ۸ کاراکتر؛ حداکثر ۷۲ بایت برای رمزهای فارسی یا انگلیسی.</small>
-          <label class="checkbox-label"><input type="checkbox" id="new-is-admin"> دسترسی ادمین (امکان ساخت کاربران)</label>
+          <label class="checkbox-label"><input type="checkbox" id="new-is-admin"> دسترسی ادمین (مدیریت کاربران و سایت‌ها)</label>
           <button class="primary" id="create-user" type="submit">ساخت کاربر</button>
           <p id="create-message" class="form-message" role="status" aria-live="polite"></p>
         </form>

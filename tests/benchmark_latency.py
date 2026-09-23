@@ -19,6 +19,7 @@ from playwright.async_api import async_playwright
 from app.db import SessionLocal
 from app.models import BrowserTab, User
 from app.services.auth_service import hash_password, SESSION_COOKIE
+from tests.e2e_remote import navigate_fixture
 
 HTML = b'''<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{margin:0;background:white}button{position:absolute;left:40px;top:40px;width:200px;height:200px;border:0;background:rgb(0,200,0)}input{position:absolute;top:280px;left:40px}</style>
@@ -48,7 +49,7 @@ async def main(idle_seconds):
             (await client.post('/api/auth/login', json={'username':name, 'password':password})).raise_for_status()
             client.headers['X-CSRF-Token'] = client.cookies['shared_browser_csrf']
             (await client.get('/api/tabs/me')).raise_for_status()
-            (await client.post('/api/tabs/me/navigate', json={'url':f'http://127.0.0.1:{fixture.server_port}'})).raise_for_status()
+            await navigate_fixture(client, f'http://127.0.0.1:{fixture.server_port}')
             async with async_playwright() as pw:
                 browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, args=['--no-sandbox'])
                 context = await browser.new_context(viewport={'width':1920,'height':1080})
