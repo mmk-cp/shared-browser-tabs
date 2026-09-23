@@ -1,4 +1,5 @@
 import RFB from '/novnc/core/rfb.js';
+import {createTransfers} from './transfers.js';
 
 // Keep noVNC 1.6's encoding negotiation compatible with x11vnc's -id mode.
 // DesktopSize is required when the browser is resized, including on phones.
@@ -24,6 +25,7 @@ let remoteSize = {width:1600, height:900}, context = {}, lastUrl = '';
 let stopped = false, connected = false, composing = false;
 const pending = new Map();
 const csrf = () => decodeURIComponent(document.cookie.split('; ').find(x => x.startsWith('shared_browser_csrf='))?.split('=')[1] || '');
+const transfers = createTransfers({command, api, notify, screen, closePanels});
 
 function sessionEnded() {
   stopped = true; connected = false;
@@ -110,6 +112,7 @@ async function connect() {
     input = new WebSocket(`${base}/ws/input`);
     input.onmessage = event => {
       const message = JSON.parse(event.data);
+      if (transfers.message(message)) return;
       if (message.type === 'clipboard' && typeof message.text === 'string') {
         writeLocal(message.text, {site:true});
         return;
@@ -186,8 +189,18 @@ async function writeLocal(text, {site = false} = {}) {
   }
 }
 async function pasteLocal() {
-  try { await insertText(await navigator.clipboard.readText()); }
-  catch { togglePanel(clipboardPanel, $('clipboard-toggle')); notify('متن را در کادر بچسبانید و «ارسال» را بزنید'); }
+  try {
+    if (navigator.clipboard.read) {
+      const items = await navigator.clipboard.read(), images = [];
+      for (const item of items) {
+        const type = item.types.find(type => ['image/png','image/jpeg','image/webp','image/gif'].includes(type));
+        if (type) images.push(new File([await item.getType(type)], `clipboard.${type.split('/')[1]}`, {type}));
+      }
+      if (images.length) { await transfers.pasteImages(images); return; }
+    }
+    await insertText(await navigator.clipboard.readText());
+  }
+  catch { togglePanel(clipboardPanel, $('clipboard-toggle')); notify('برای عکس Ctrl+V بزنید یا «انتخاب عکس برای Paste» را انتخاب کنید.'); }
 }
 $('send-clipboard').onclick = async () => {
   try { await insertText($('clipboard-text').value); closePanels(); screen.focus(); }
@@ -290,13 +303,16 @@ screen.addEventListener('wheel', event => {
 // All text and key events share one ordered WebSocket, avoiding the earlier
 // race between Persian HTTP text insertion and VNC space/backspace events.
 screen.addEventListener('keydown', event => {
-  event.preventDefault(); event.stopImmediatePropagation();
-  if (event.isComposing || event.key === 'Process' || event.key === 'Dead') return;
+  event.stopImmediatePropagation();
   const shortcut=event.ctrlKey||event.metaKey, key=event.key.toLowerCase();
-  if (shortcut && ['v','c','x'].includes(key)) {
+  // Let the browser fire its native paste event, which includes image Files
+  // and works without a clipboard-read permission prompt on Ctrl/Cmd+V.
+  if (shortcut && key === 'v') { send({type:'release'}); return; }
+  event.preventDefault();
+  if (event.isComposing || event.key === 'Process' || event.key === 'Dead') return;
+  if (shortcut && ['c','x'].includes(key)) {
     send({type:'release'});
-    if(key==='v') pasteLocal();
-    else copyRemote().then(async text => { await writeLocal(text); if(key==='x' && text) { send({type:'key_down',key:'Backspace'}); send({type:'key_up',key:'Backspace'}); } }).catch(e=>notify(e.message));
+    copyRemote().then(async text => { await writeLocal(text); if(key==='x' && text) { send({type:'key_down',key:'Backspace'}); send({type:'key_up',key:'Backspace'}); } }).catch(e=>notify(e.message));
   } else if (shortcut && key==='l') { send({type:'release'}); togglePanel(urlPanel,$('url-toggle')); }
   else if (shortcut && key==='r') { send({type:'release'}); pageAction('reload'); }
   else if (shortcut && ['t','n','w','u'].includes(key)) send({type:'release'});
@@ -305,7 +321,16 @@ screen.addEventListener('keydown', event => {
 },true);
 screen.addEventListener('keyup', event => { event.preventDefault(); event.stopImmediatePropagation(); if(event.key.length>1||event.ctrlKey||event.metaKey||event.altKey) send({type:'key_up',key:event.key}); },true);
 screen.addEventListener('compositionend', event => { if(event.data) send({type:'text',text:event.data}); },true);
-screen.addEventListener('paste', event => { event.preventDefault(); event.stopImmediatePropagation(); send({type:'text',text:event.clipboardData.getData('text/plain')}); },true);
+function pasteEvent(event, textToo = true) {
+  const files = [...(event.clipboardData?.files || [])];
+  if (!files.length && !textToo) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (files.length) transfers.pasteImages(files);
+  else send({type:'text',text:event.clipboardData?.getData('text/plain') || ''});
+}
+screen.addEventListener('paste', event => pasteEvent(event), true);
+mobileInput.addEventListener('paste', event => pasteEvent(event, false), true);
+$('clipboard-text').addEventListener('paste', event => pasteEvent(event, false), true);
 screen.addEventListener('blur', () => send({type:'release'}));
 mobileInput.addEventListener('compositionstart', () => { composing=true; });
 function flushMobile() { if(mobileInput.value) send({type:'text',text:mobileInput.value}); mobileInput.value=''; }

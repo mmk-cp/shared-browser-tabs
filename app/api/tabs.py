@@ -2,14 +2,17 @@ import asyncio
 import logging
 from urllib.parse import urlparse
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.requests import ClientDisconnect
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
 from app.api.deps import current_user, protected_user
-from app.db import get_db
+from app.db import get_db, SessionLocal
 from app.models import User, BrowserTab
 from app.services.tab_manager import tab_manager
 from app.services.input_manager import selection_text
+from app.services.auth_service import SESSION_COOKIE, get_user_from_token
+from app.services.file_transfer import file_transfers, decode_files, TransferError, MAX_BODY, UPLOAD_SLOTS
 
 router = APIRouter(prefix="/api/tabs", tags=["tabs"])
 logger = logging.getLogger(__name__)
@@ -121,6 +124,44 @@ async def read_browser_clipboard(user: User = Depends(protected_user), db: Sessi
 async def delete_my_tab(user: User = Depends(protected_user), db: Session = Depends(get_db)):
     await tab_manager.reset(db, user)
     return {"ok": True}
+
+
+@router.post('/me/files')
+async def upload_files(request: Request, user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    tab = own_tab(db, user)
+    page = tab_manager.get_page(tab)
+    token = request.headers.get('x-upload-token', '')
+    try:
+        file_transfers.require(page, user.session_id, token)
+        try:
+            length = int(request.headers.get('content-length', '0'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail='اندازهٔ درخواست نامعتبر است.')
+        if length > MAX_BODY:
+            raise HTTPException(status_code=413, detail='مجموع فایل‌ها باید حداکثر ۲۰ مگابایت باشد.')
+        async with UPLOAD_SLOTS:
+            async def read_body():
+                body = bytearray()
+                async for chunk in request.stream():
+                    if len(body) + len(chunk) > MAX_BODY:
+                        raise HTTPException(status_code=413, detail='مجموع فایل‌ها باید حداکثر ۲۰ مگابایت باشد.')
+                    body.extend(chunk)
+                return bytes(body)
+            body = await asyncio.wait_for(read_body(), timeout=180)
+            files = await asyncio.to_thread(decode_files, body)
+            # Revalidate after a slow upload; logout/login replacement may
+            # have happened while bytes were arriving.
+            with SessionLocal() as fresh:
+                current = get_user_from_token(request.cookies.get(SESSION_COOKIE), fresh)
+                if not current or current.id != user.id or current.session_id != user.session_id:
+                    raise HTTPException(status_code=401, detail='نشست شما پایان یافته است.')
+            return await asyncio.wait_for(file_transfers.deliver(page, user.session_id, token, files), timeout=20)
+    except TransferError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail='انتقال فایل بیش از حد طول کشید؛ دوباره تلاش کنید.')
+    except ClientDisconnect:
+        raise HTTPException(status_code=400, detail='انتقال فایل قطع شد.')
 
 
 @router.api_route("/{tab_id}", methods=["GET", "POST", "DELETE"])

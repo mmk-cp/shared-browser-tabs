@@ -27,6 +27,9 @@
 .url-row{min-width:0}.url-row input{min-width:0}
 .clipboard-panel textarea{font-size:16px}
 .clipboard-panel .panel-actions{flex-wrap:wrap}
+.local-file-input{display:none!important}
+.file-panel{z-index:20}.file-panel h2{font-size:18px;margin:0 0 12px}.file-panel small{display:block;margin-top:14px;color:#a5bac8;font-size:12px}
+.file-panel .panel-actions{flex-wrap:wrap}.file-panel button:disabled{opacity:.6;cursor:wait}#file-status{font-size:14px;overflow-wrap:anywhere}
 .mobile-input{display:none;position:absolute;bottom:4px;left:8px;right:8px;width:calc(100% - 16px);height:42px;min-height:42px;padding:7px 12px;resize:none;font-size:16px;z-index:12;direction:rtl;background:#14212ef5}
 .keyboard-open .mobile-input{display:block}
 .context-menu{position:fixed;z-index:30;direction:rtl;width:260px;max-width:calc(100vw - 8px);padding:5px;background:#1a2631;border:1px solid #3a5264;border-radius:10px;box-shadow:0 8px 30px #0008}

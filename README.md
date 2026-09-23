@@ -59,7 +59,15 @@ The Xvfb layout reserves twelve non-overlapping window slots. The initial browse
 
 Chromium is headed with a persistent profile and without Playwright's automation launcher flags. This does **not** guarantee that ChatGPT, Cloudflare or another site accepts a session. IP reputation, account rules and site-side challenges remain external factors. A timeout is reported honestly instead of returning a false success for the previously loaded page. Challenges must be completed by the user where supported.
 
-The viewer transports pixels and input. Audio, microphone/camera forwarding, local file upload/download transfer and arbitrary native browser dialogs are not implemented. The right-click menu provides the documented page actions; it is not the complete Chromium developer/menu interface.
+The viewer transports pixels and input. Audio, microphone/camera forwarding, download transfer and arbitrary native browser dialogs are not implemented. The right-click menu provides the documented page actions; it is not the complete Chromium developer/menu interface.
+
+### Local files and image paste
+
+- Click a site's normal upload button, then **انتخاب فایل** in the viewer panel. Select files on your own computer/phone, not on the server. HTML file pickers (including cross-origin frames) are intercepted before a native server dialog can cover the streamed window. **لغو** / Escape closes the panel without clearing previously selected files.
+- Click the site's editor and press **Ctrl+V / Cmd+V** to paste an image from your device clipboard. Text paste still works. The context-menu Paste action also reads image clipboard items on supported browsers with permission. On phones, paste into the keyboard/clipboard panel, or use **انتخاب عکس برای Paste** in the clipboard panel.
+- Up to **8 files, 20 MiB total** per transfer; the site's single/multiple selection and file-type filter are retained. Image paste supports PNG, JPEG, GIF and WebP. Sites must handle an image `paste` event; synthetic paste is not accepted by every site. If it does not attach the image, use that site's upload button instead. Clipboard API reads require HTTPS/localhost and browser permission; native keyboard paste and local file selection are the alternatives.
+- Each transfer has an expiring, single-use token bound to the authenticated session and its own page/input. Navigating or cancelling invalidates the target. Logout/replacement login rejects old transfers. File bytes are supplied directly to that input; the API never accepts server file paths or reads the shared desktop clipboard. Selecting files sends them to the remote site, just like its normal uploader.
+- Folder selection, `showOpenFilePicker` / File System Access API dialogs, downloads, and image copy **from remote to local** are not covered by this feature. The existing remote-to-local copy relay remains text-only.
 
 Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled and the original Host/Origin preserved. Set `COOKIE_SECURE=true` when served over HTTPS. Do not publish CDP or VNC ports. Stop the app before backing up the profile and database together.
 
@@ -70,6 +78,8 @@ docker compose exec -T app python -m tests.e2e_remote
 docker compose exec -T app python -m tests.e2e_accounts
 docker compose exec -T app python -m tests.e2e_registration
 docker compose exec -T app python -m tests.e2e_clipboard
+docker compose exec -T app python -m tests.e2e_files
+docker compose exec -T app python -m unittest tests.test_file_transfer
 docker compose exec -T app python -m unittest tests.test_clipboard_bridge
 docker compose exec -T app python -m unittest tests.test_input_buffer
 docker compose exec -T app python -m tests.benchmark_latency --idle-seconds 65

@@ -58,9 +58,21 @@
         <button id="copy-local-clipboard" type="button" class="accent-button">کپی در دستگاه من</button>
         <button id="send-clipboard" type="button" class="accent-button">ارسال و Paste</button>
         <button id="copy-clipboard" type="button" class="secondary-button">کپی متن انتخاب‌شده</button>
+        <button id="choose-paste-image" type="button" class="secondary-button">انتخاب عکس برای Paste</button>
       </div>
       <small>کپیِ دکمه‌های سایت هم اینجا دریافت می‌شود. برای کپی خودکار، HTTPS یا localhost و اجازهٔ کلیپ‌بورد لازم است. Ctrl+V برای چسباندن داخل مرورگر هم فعال است.</small>
     </section>
+    <section id="file-panel" class="floating-panel file-panel" role="dialog" aria-label="ارسال فایل به سایت">
+      <h2>انتخاب فایل از دستگاه شما</h2>
+      <p id="file-status" role="status" aria-live="polite"></p>
+      <div class="panel-actions">
+        <button id="choose-files" type="button" class="accent-button">انتخاب فایل</button>
+        <button id="cancel-files" type="button" class="secondary-button">لغو</button>
+      </div>
+      <small>حداکثر ۸ فایل و مجموعاً ۲۰ مگابایت؛ فایل فقط به همین تب فرستاده می‌شود.</small>
+    </section>
+    <input id="local-files" class="local-file-input" type="file" hidden>
+    <input id="local-paste-image" class="local-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
   </main>
   <script type="module" src="/static/js/dashboard.js"></script>
 </body>
