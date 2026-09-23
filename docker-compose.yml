@@ -12,3 +12,11 @@ services:
       - ./browser-data:/browser-data
     restart: unless-stopped
     shm_size: "1gb"
+    # Hard cgroup limits protect the host even if a site/test leaks memory.
+    # Equal memory+swap limits mean this service cannot consume host swap.
+    mem_limit: ${APP_MEMORY_LIMIT:-3g}
+    memswap_limit: ${APP_MEMORY_LIMIT:-3g}
+    pids_limit: 512
+    # Download artifacts live only in bounded RAM-backed storage, never volumes.
+    tmpfs:
+      - /dev/shm/shared-browser-downloads:size=256m,mode=0700

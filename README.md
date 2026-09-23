@@ -59,7 +59,7 @@ The Xvfb layout reserves twelve non-overlapping window slots. The initial browse
 
 Chromium is headed with a persistent profile and without Playwright's automation launcher flags. This does **not** guarantee that ChatGPT, Cloudflare or another site accepts a session. IP reputation, account rules and site-side challenges remain external factors. A timeout is reported honestly instead of returning a false success for the previously loaded page. Challenges must be completed by the user where supported.
 
-The viewer transports pixels and input. Audio, microphone/camera forwarding, download transfer and arbitrary native browser dialogs are not implemented. The right-click menu provides the documented page actions; it is not the complete Chromium developer/menu interface.
+The viewer transports pixels and input. Audio, microphone/camera forwarding and arbitrary native browser dialogs are not implemented. The right-click menu provides the documented page actions; it is not the complete Chromium developer/menu interface.
 
 ### Local files and image paste
 
@@ -67,7 +67,23 @@ The viewer transports pixels and input. Audio, microphone/camera forwarding, dow
 - Click the site's editor and press **Ctrl+V / Cmd+V** to paste an image from your device clipboard. Text paste still works. The context-menu Paste action also reads image clipboard items on supported browsers with permission. On phones, paste into the keyboard/clipboard panel, or use **انتخاب عکس برای Paste** in the clipboard panel.
 - Up to **8 files, 20 MiB total** per transfer; the site's single/multiple selection and file-type filter are retained. Image paste supports PNG, JPEG, GIF and WebP. Sites must handle an image `paste` event; synthetic paste is not accepted by every site. If it does not attach the image, use that site's upload button instead. Clipboard API reads require HTTPS/localhost and browser permission; native keyboard paste and local file selection are the alternatives.
 - Each transfer has an expiring, single-use token bound to the authenticated session and its own page/input. Navigating or cancelling invalidates the target. Logout/replacement login rejects old transfers. File bytes are supplied directly to that input; the API never accepts server file paths or reads the shared desktop clipboard. Selecting files sends them to the remote site, just like its normal uploader.
-- Folder selection, `showOpenFilePicker` / File System Access API dialogs, downloads, and image copy **from remote to local** are not covered by this feature. The existing remote-to-local copy relay remains text-only.
+- Folder selection, `showOpenFilePicker` / File System Access API dialogs, and image copy **from remote to local** are not covered by this feature. The existing remote-to-local copy relay remains text-only.
+
+### Downloads and server cleanup
+
+Click a site's download link/button normally. Standard attachments, Blob downloads and download links opening a new window are sent to the authenticated user's device. The **↓** toolbar panel shows progress and a **ذخیره در دستگاه** fallback link if the device browser blocks automatic saving. This link uses a Blob already received on that device, not another server copy. Mobile saving/opening behavior depends on the device browser. Files that a site opens inline (e.g. a PDF viewer) require that site's actual Download button.
+
+- Maximum **100 MiB per file**, one pending download per user, two across the service. Server-to-device responses are streamed in 64 KiB chunks; the backend does not load the whole file into Python memory. The device buffers the completed file for local saving; at most two fallback Blobs remain, each for five minutes.
+- Chromium stages download artifacts only under `/dev/shm/shared-browser-downloads`, mounted as a **256 MiB tmpfs** by Compose. This is not a persistent Docker volume or profile directory. Staging requires Linux tmpfs and fails closed if mounted on a disk filesystem. tmpfs can use swap on a general Linux host; the supplied Compose prevents this container from using additional swap through equal RAM and RAM+swap limits.
+- Successful transfers and interrupted HTTP transfers delete the server artifact. Cancelling, closing the owned tab, logout/replacement login, or losing all viewers also clean it up (disconnect grace: 10 seconds). Ready files not fetched expire after two minutes; receiving/sending has a five-minute limit. Cleanup runs every second, including size/memory-pressure checks. Startup removes stale files only from this feature's task-owned staging directories. Stopped/recreated containers lose their tmpfs contents.
+- Transfers are one-shot, require login and CSRF, and are bound to the initiating session and its own page. They cannot address server paths or another user's downloads. No-store headers prevent response caching. After an incomplete transfer, download again from the original site; the server deliberately does not retain a retry copy.
+- This removes downloaded-file artifacts, not the shared site's cookies/history or data that websites themselves store in the persistent profile. No claim of forensic secure erasure is made.
+
+### Memory limits and safe testing
+
+Compose enforces a default **3 GiB total container memory cap**, an equal memory+swap cap (no additional swap), and 512 processes/threads. `APP_MEMORY_LIMIT=3g` in `.env` changes the RAM cap; choose a value that leaves memory for the OS and other services. Shared memory and tmpfs consumption count toward this cap. New downloads are rejected, and growing downloads cancelled, near 85% usage or with less than 256 MiB headroom. Browser tabs can still exhaust the budget: the kernel may kill a process inside this container; these limits protect the host, not guarantee that every heavy site stays running. Xvfb startup now removes only its stale display lock after an unclean stop and has a bounded readiness wait.
+
+Run test suites **sequentially**, under the Compose memory cap and with a wall-clock timeout; browser E2E suites create an additional Chromium and temporarily need more RAM. Unit tests can also run with a 512 MiB per-process virtual-memory cap. Do not remove resource caps to make a failing test pass. Check `docker stats --no-stream` and `/sys/fs/cgroup/memory.events` while testing. The interrupted-download test uses a blocking ASGI receive, not a spinning mock that accumulates call history.
 
 Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled and the original Host/Origin preserved. Set `COOKIE_SECURE=true` when served over HTTPS. Do not publish CDP or VNC ports. Stop the app before backing up the profile and database together.
 
@@ -79,6 +95,8 @@ docker compose exec -T app python -m tests.e2e_accounts
 docker compose exec -T app python -m tests.e2e_registration
 docker compose exec -T app python -m tests.e2e_clipboard
 docker compose exec -T app python -m tests.e2e_files
+docker compose exec -T app timeout 150s python -m tests.e2e_downloads
+docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_downloads'
 docker compose exec -T app python -m unittest tests.test_file_transfer
 docker compose exec -T app python -m unittest tests.test_clipboard_bridge
 docker compose exec -T app python -m unittest tests.test_input_buffer

@@ -10,6 +10,7 @@ from playwright.async_api import Browser, BrowserContext, Page, Playwright, asyn
 from app.config import get_settings
 from app.services.clipboard_bridge import clipboard_bridge
 from app.services.file_transfer import file_transfers
+from app.services.download_manager import downloads
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -44,6 +45,8 @@ class BrowserManager:
             if self.context is not None:
                 return self.context
             os.makedirs(settings.browser_data_dir, exist_ok=True)
+            await downloads.stop()
+            artifact_dir = downloads.prepare()
             self.playwright = await async_playwright().start()
             if settings.browser_connect_over_cdp and not settings.browser_headless:
                 self.context = await self._start_real_chromium()
@@ -52,8 +55,10 @@ class BrowserManager:
                     user_data_dir=settings.browser_data_dir,
                     headless=settings.browser_headless,
                     viewport={"width": settings.default_width, "height": settings.default_height},
+                    accept_downloads=True, artifacts_dir=artifact_dir, downloads_path=artifact_dir,
                     args=["--no-sandbox", "--disable-dev-shm-usage"],
                 )
+            downloads.watch_context(self.context)
             self.context.on("close", lambda: asyncio.create_task(self._handle_context_close()))
             logger.info("BROWSER_STARTED persistent_profile=%s mode=%s", settings.browser_data_dir,
                         "external-headful-cdp" if self.process else "playwright")
@@ -95,7 +100,8 @@ class BrowserManager:
                 error = self.process.stderr.read().strip() if self.process.stderr else ""
                 raise RuntimeError(f"Chromium exited with code {self.process.returncode}: {error[-1000:]}")
             try:
-                self.browser = await self.playwright.chromium.connect_over_cdp(endpoint, timeout=2000)
+                self.browser = await self.playwright.chromium.connect_over_cdp(
+                    endpoint, timeout=2000, is_local=True, artifacts_dir=str(downloads.directory))
                 if self.browser.contexts:
                     return self.browser.contexts[0]
             except Exception as exc:
@@ -138,6 +144,7 @@ class BrowserManager:
         self._stopping = True
         self._ignore_next_close = self.context is not None
         async with self._lock:
+            await downloads.stop()
             if self.context:
                 if self.browser:
                     await self.browser.close()
@@ -246,6 +253,7 @@ class BrowserManager:
         await self.resize_page(page_id, settings.vnc_view_width, settings.vnc_view_height)
         await clipboard_bridge.attach(page)
         await file_transfers.attach(page)
+        downloads.attach(page)
         if url and url != "about:blank":
             try:
                 # Startup does not wait for all subresources to load.

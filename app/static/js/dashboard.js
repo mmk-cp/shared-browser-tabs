@@ -1,5 +1,6 @@
 import RFB from '/novnc/core/rfb.js';
 import {createTransfers} from './transfers.js';
+import {createDownloads} from './downloads.js';
 
 // Keep noVNC 1.6's encoding negotiation compatible with x11vnc's -id mode.
 // DesktopSize is required when the browser is resized, including on phones.
@@ -26,6 +27,7 @@ let stopped = false, connected = false, composing = false;
 const pending = new Map();
 const csrf = () => decodeURIComponent(document.cookie.split('; ').find(x => x.startsWith('shared_browser_csrf='))?.split('=')[1] || '');
 const transfers = createTransfers({command, api, notify, screen, closePanels});
+const downloadUI = createDownloads({csrf, api, notify, screen, closePanels});
 
 function sessionEnded() {
   stopped = true; connected = false;
@@ -69,6 +71,7 @@ function showConnection(message, ready = false) {
   $('online-dot').classList.toggle('connected', ready);
 }
 function closePanels() {
+  downloadUI.closePanel();
   urlPanel.classList.remove('open'); clipboardPanel.classList.remove('open');
   $('url-toggle').classList.remove('active'); $('clipboard-toggle').classList.remove('active');
   menu.hidden = true;
@@ -113,6 +116,7 @@ async function connect() {
     input.onmessage = event => {
       const message = JSON.parse(event.data);
       if (transfers.message(message)) return;
+      if (downloadUI.message(message)) return;
       if (message.type === 'clipboard' && typeof message.text === 'string') {
         writeLocal(message.text, {site:true});
         return;

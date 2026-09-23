@@ -20,6 +20,7 @@
       <button id="url-toggle" class="rail-button" title="باز کردن آدرس" aria-label="باز کردن آدرس">⌕</button>
       <button id="reload" class="rail-button" title="بارگذاری مجدد" aria-label="بارگذاری مجدد">↻</button>
       <button id="clipboard-toggle" class="rail-button" title="کپی و پیست" aria-label="کپی و پیست">▣</button>
+      <button id="downloads-toggle" class="rail-button" title="دانلودها" aria-label="دانلودها">↓</button>
       <button id="keyboard-toggle" class="rail-button" title="کیبورد" aria-label="کیبورد">⌨</button>
       <button id="maximize" class="rail-button" title="بزرگ کردن نمایشگر" aria-label="بزرگ کردن نمایشگر">⛶</button>
       <span class="rail-spacer"></span>
@@ -43,6 +44,12 @@
       <button data-command="reload">بارگذاری مجدد</button>
     </nav>
 
+    <section id="downloads-panel" class="floating-panel downloads-panel" aria-label="دانلودها">
+      <h2>دانلود روی دستگاه شما</h2>
+      <p id="downloads-empty">هنوز دانلودی انجام نشده است.</p>
+      <ul id="downloads-list" aria-live="polite"></ul>
+      <small>هر فایل حداکثر ۱۰۰ مگابایت. نسخهٔ موقت سرور بعد از انتقال یا لغو پاک می‌شود. لینک ذخیرهٔ محلی تا ۵ دقیقه فعال است.</small>
+    </section>
     <form id="url-panel" class="floating-panel url-panel" autocomplete="off">
       <label for="url-input">آدرس سایت</label>
       <div class="url-row">

@@ -28,6 +28,7 @@
 .clipboard-panel textarea{font-size:16px}
 .clipboard-panel .panel-actions{flex-wrap:wrap}
 .local-file-input{display:none!important}
+.downloads-panel{z-index:19}.downloads-panel h2{font-size:18px;margin:0 0 12px}.downloads-panel small{display:block;color:#a5bac8;font-size:12px;margin:10px 0}.downloads-panel ul{list-style:none;padding:0;margin:0}.downloads-panel li{padding:12px 0;border-bottom:1px solid #344654}.downloads-panel strong{display:block;overflow-wrap:anywhere}.downloads-panel .panel-actions{flex-wrap:wrap}.downloads-panel a{text-decoration:none;font-size:13px}.downloads-panel [hidden]{display:none!important}
 .file-panel{z-index:20}.file-panel h2{font-size:18px;margin:0 0 12px}.file-panel small{display:block;margin-top:14px;color:#a5bac8;font-size:12px}
 .file-panel .panel-actions{flex-wrap:wrap}.file-panel button:disabled{opacity:.6;cursor:wait}#file-status{font-size:14px;overflow-wrap:anywhere}
 .mobile-input{display:none;position:absolute;bottom:4px;left:8px;right:8px;width:calc(100% - 16px);height:42px;min-height:42px;padding:7px 12px;resize:none;font-size:16px;z-index:12;direction:rtl;background:#14212ef5}

@@ -13,6 +13,7 @@ from app.services.input_manager import handle_input
 from app.services.input_buffer import InputBuffer
 from app.services.clipboard_bridge import clipboard_bridge
 from app.services.file_transfer import file_transfers
+from app.services.download_manager import downloads
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -48,6 +49,15 @@ async def input_socket(websocket: WebSocket):
     buffer = InputBuffer()
     clipboard_events = clipboard_bridge.subscribe(page)
     file_events = file_transfers.subscribe(page, user.session_id)
+    download_events = downloads.subscribe(page, user.session_id)
+
+    async def forward_downloads():
+        while True:
+            message = await download_events.get()
+            if not await authenticated_user(websocket):
+                await websocket.close(code=4401, reason="Session ended")
+                return
+            await websocket.send_json(message)
 
     async def forward_files():
         while True:
@@ -88,6 +98,7 @@ async def input_socket(websocket: WebSocket):
                 elif event.get('type') == 'cancel_files':
                     result = await file_transfers.cancel(page, user.session_id, event.get('token'))
                 else:
+                    downloads.interacted(page, user.session_id)
                     file_transfers.interacted(page, user.session_id)
                     clipboard_bridge.interacted(page, event)
                     result = await asyncio.wait_for(handle_input(page, event), timeout=8)
@@ -104,6 +115,7 @@ async def input_socket(websocket: WebSocket):
         asyncio.create_task(apply_events()),
         asyncio.create_task(forward_clipboard()),
         asyncio.create_task(forward_files()),
+        asyncio.create_task(forward_downloads()),
     }
     try:
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -113,6 +125,7 @@ async def input_socket(websocket: WebSocket):
             except WebSocketDisconnect:
                 pass
     finally:
+        downloads.unsubscribe(page, download_events)
         file_transfers.unsubscribe(page, file_events)
         clipboard_bridge.unsubscribe(page, clipboard_events)
         for task in tasks:

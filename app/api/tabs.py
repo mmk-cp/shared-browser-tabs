@@ -13,6 +13,8 @@ from app.services.tab_manager import tab_manager
 from app.services.input_manager import selection_text
 from app.services.auth_service import SESSION_COOKIE, get_user_from_token
 from app.services.file_transfer import file_transfers, decode_files, TransferError, MAX_BODY, UPLOAD_SLOTS
+from app.services.download_manager import downloads
+from app.services.download_response import DownloadResponse
 
 router = APIRouter(prefix="/api/tabs", tags=["tabs"])
 logger = logging.getLogger(__name__)
@@ -162,6 +164,20 @@ async def upload_files(request: Request, user: User = Depends(protected_user), d
         raise HTTPException(status_code=408, detail='انتقال فایل بیش از حد طول کشید؛ دوباره تلاش کنید.')
     except ClientDisconnect:
         raise HTTPException(status_code=400, detail='انتقال فایل قطع شد.')
+
+
+@router.post('/me/downloads/{token}')
+async def receive_download(token: str, request: Request, user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    page = tab_manager.get_page(own_tab(db, user))
+    item = downloads.claim(page, user.session_id, token)
+    return DownloadResponse(item, request.cookies.get(SESSION_COOKIE))
+
+
+@router.delete('/me/downloads/{token}')
+async def cancel_download(token: str, user: User = Depends(protected_user), db: Session = Depends(get_db)):
+    page = tab_manager.get_page(own_tab(db, user))
+    await downloads.remove(downloads.require(page, user.session_id, token))
+    return {'ok': True}
 
 
 @router.api_route("/{tab_id}", methods=["GET", "POST", "DELETE"])
