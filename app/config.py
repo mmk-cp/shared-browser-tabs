@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     browser_executable_path: str | None = None
     browser_fps: int = 15
     browser_jpeg_quality: int = 70
-    default_width: int = 1920
-    default_height: int = 1080
+    default_width: int = 1600
+    default_height: int = 900
     vnc_base_port: int = 5900
-    vnc_view_width: int = 1920
-    vnc_view_height: int = 1080
+    vnc_view_width: int = 1600
+    vnc_view_height: int = 900
     admin_username: str = "admin"
     admin_password: str = "change-me"
     cookie_secure: bool = False

@@ -266,7 +266,7 @@ class BrowserManager:
         raise RuntimeError(f"Could not find native Chromium window {marker}: {last_output}")
 
     async def resize_page(self, page_id: str, width: int, height: int) -> dict:
-        width, height = max(280, min(1920, width)), max(200, min(1300, height))
+        width, height = max(280, min(1600, width)), max(200, min(900, height))
         size = {"width": width, "height": height}
         if self.window_sizes.get(page_id) == size:
             return size

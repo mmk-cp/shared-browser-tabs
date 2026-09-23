@@ -22,4 +22,4 @@ RUN mkdir -p /app/data /browser-data /app/app/static/fonts \
 EXPOSE 8000
 ENV DISPLAY=:99
 ENV BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
-CMD ["sh", "-c", "Xvfb :99 -screen 0 8192x4320x24 -ac +extension RANDR >/tmp/xvfb.log 2>&1 & while ! xdpyinfo -display :99 >/dev/null 2>&1; do sleep 0.1; done; openbox >/tmp/openbox.log 2>&1 & exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "Xvfb :99 -screen 0 8192x4320x24 -ac +extension RANDR >/tmp/xvfb.log 2>&1 & while ! xdpyinfo -display :99 >/dev/null 2>&1; do sleep 0.1; done; openbox >/tmp/openbox.log 2>&1 & exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws-per-message-deflate false"]

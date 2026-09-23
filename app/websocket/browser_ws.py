@@ -10,6 +10,7 @@ from app.services.auth_service import SESSION_COOKIE, get_user_from_token
 from app.services.tab_manager import tab_manager
 from app.services.stream_manager import stream_manager
 from app.services.input_manager import handle_input
+from app.services.input_buffer import InputBuffer
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,17 +43,22 @@ async def input_socket(websocket: WebSocket):
         await websocket.close(code=1011)
         return
     await websocket.accept()
-    guard = asyncio.create_task(watch_session(websocket))
-    try:
+    buffer = InputBuffer()
+
+    async def receive_events():
         while True:
             event = await websocket.receive_json()
+            if isinstance(event, dict):
+                await buffer.put(event)
+
+    async def apply_events():
+        while True:
+            event = await buffer.get()
             # Reject queued input immediately after a replacement login,
             # without waiting for the periodic stream-revocation check.
             if not await authenticated_user(websocket):
                 await websocket.close(code=4401, reason="Session ended")
                 break
-            if not isinstance(event, dict):
-                continue
             try:
                 if event.get("type") == "resize":
                     result = await tab_manager.browser.resize_page(page_id, int(event["width"]), int(event["height"]))
@@ -64,11 +70,23 @@ async def input_socket(websocket: WebSocket):
                 logger.warning("TAB_INPUT_FAILED type=%s error=%s", event.get("type"), exc)
                 if event.get("id") is not None:
                     await websocket.send_json({"id": event["id"], "error": "این فرمان اجرا نشد؛ دوباره تلاش کنید."})
-    except WebSocketDisconnect:
-        pass
+
+    tasks = {
+        asyncio.create_task(watch_session(websocket)),
+        asyncio.create_task(receive_events()),
+        asyncio.create_task(apply_events()),
+    }
+    try:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            try:
+                task.result()
+            except WebSocketDisconnect:
+                pass
     finally:
-        guard.cancel()
-        await asyncio.gather(guard, return_exceptions=True)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         if not page.is_closed():
             try:
                 await handle_input(page, {"type": "release"})

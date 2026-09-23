@@ -45,6 +45,10 @@ class StreamManager:
                 "-id", hex(xid), "-rfbport", str(port), "-localhost",
                 "-forever", "-shared", "-nopw", "-viewonly", "-nosel",
                 "-xrandr", "resize", "-noxdamage", "-noscr", "-quiet",
+                # Inputs arrive through CDP, not VNC, so x11vnc otherwise
+                # thinks the user is idle and can sleep ~1.5s between polls.
+                "-nonap", "-sb", "0", "-nowait_bog",
+                "-wait", "16", "-defer", "5",
             ]
             process = await asyncio.create_subprocess_exec(
                 *args, stdout=asyncio.subprocess.DEVNULL,

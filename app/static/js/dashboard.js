@@ -4,7 +4,9 @@ import RFB from '/novnc/core/rfb.js';
 // DesktopSize is required when the browser is resized, including on phones.
 class WindowRFB extends RFB {
   _sendEncodings() {
-    const encodings = [7, 0, -223, -247]; // Tight, raw, resize, compression 9
+    // Avoid the CPU-heavy maximum compression setting. Quality 8 permits
+    // high-quality JPEG for photographic regions within the Tight stream.
+    const encodings = [7, 0, -223, -254, -24]; // Tight, raw, resize, compression 2, quality 8
     this._sock.sQpush8(2);
     this._sock.sQpush8(0);
     this._sock.sQpush16(encodings.length);
@@ -18,7 +20,7 @@ const screen = $('vnc-screen'), workspace = $('workspace'), state = $('connectio
 const urlPanel = $('url-panel'), clipboardPanel = $('clipboard-panel'), menu = $('context-menu');
 const mobileInput = $('mobile-input');
 let rfb, input, reconnectTimer, resizeTimer, toastTimer, requestId = 0;
-let remoteSize = {width:1920, height:1080}, context = {}, lastUrl = '';
+let remoteSize = {width:1600, height:900}, context = {}, lastUrl = '';
 let stopped = false, connected = false, composing = false;
 const pending = new Map();
 const csrf = () => decodeURIComponent(document.cookie.split('; ').find(x => x.startsWith('shared_browser_csrf='))?.split('=')[1] || '');
@@ -46,6 +48,8 @@ async function api(path, options = {}) {
   return data;
 }
 function send(event) {
+  // A staged hover must never be sent after a newer click/key action.
+  if (event.type !== 'move') flushPointerMove();
   if (input?.readyState === WebSocket.OPEN) input.send(JSON.stringify(event));
 }
 function command(event) {
@@ -76,7 +80,7 @@ function togglePanel(panel, button) {
 async function resizeRemote() {
   if (input?.readyState !== WebSocket.OPEN) return;
   const box = screen.getBoundingClientRect();
-  const ratio = Math.min(1, 1920 / box.width, 1300 / box.height);
+  const ratio = Math.min(1, 1600 / box.width, 900 / box.height);
   const size = {width:Math.max(280, Math.round(box.width*ratio)), height:Math.max(200, Math.round(box.height*ratio))};
   if (size.width === remoteSize.width && size.height === remoteSize.height) return;
   try { remoteSize = await command({type:'resize', ...size}); }
@@ -213,6 +217,11 @@ function coords(event) {
 }
 screen.addEventListener('contextmenu', event => { event.preventDefault(); event.stopImmediatePropagation(); }, true);
 let touch = null, holdTimer, moved = false, lastTap = 0, clicks = 1, lastMove, moveFrame;
+function flushPointerMove() {
+  if (moveFrame) cancelAnimationFrame(moveFrame);
+  moveFrame = null;
+  if (lastMove) { const point = lastMove; lastMove = null; send({type:'move', ...point}); }
+}
 screen.addEventListener('pointerdown', event => {
   if (!connected) return;
   event.preventDefault(); event.stopImmediatePropagation(); closePanels();
@@ -232,8 +241,8 @@ screen.addEventListener('pointermove', event => {
     if (moved && !touch.held) send({type:'wheel',...coords(event),dx:(touch.lastX-event.clientX),dy:(touch.lastY-event.clientY)});
     touch.lastX=event.clientX; touch.lastY=event.clientY;
   } else {
-    lastMove=coords(event);
-    if (!moveFrame) moveFrame=requestAnimationFrame(() => { send({type:'move',...lastMove}); moveFrame=null; });
+    lastMove={...coords(event),buttons:event.buttons};
+    if (!moveFrame) moveFrame=requestAnimationFrame(flushPointerMove);
   }
 }, true);
 screen.addEventListener('pointerup', event => {

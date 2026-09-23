@@ -38,7 +38,13 @@ Noto Arabic, Latin and emoji fonts are installed in Chromium. The application's 
 
 The VNC servers bind to container loopback, run **view-only**, and disable the shared X11 clipboard. Inputs travel on a separate ordered WebSocket targeted at the authenticated Playwright Page. This avoids X11's single global focus allowing one user to type into another user's window. Copy reads only the selection in that user's page, not a desktop-wide clipboard. Clients cannot choose a page ID or VNC port. Both WebSocket routes check session, account status and same-origin headers.
 
-The Xvfb layout reserves twelve non-overlapping window slots. The initial browser size is 1920×1080 (Full HD). Individual viewports adapt to the available viewer area, from 280×200 to 1920×1300; larger clients are scaled proportionally. A 1920×1080 viewer in focus mode receives a native 1920×1080 framebuffer without upscaling. With the toolbar visible, its width is reserved outside the browser area. Mobile clients still get a responsive viewport. Closing a tab frees its slot. This is a shared browser-session application, not a security boundary between untrusted website origins: profile storage is shared by design.
+### Responsiveness
+
+The old `BROWSER_FPS` and `BROWSER_JPEG_QUALITY` variables belong to the retired screenshot transport; they do not control VNC. The current stream polls at a 16 ms interval with a 5 ms update deferral (not a guaranteed frame rate). Automatic VNC idle naps and blank-screen throttling are disabled because input arrives through CDP, which VNC cannot observe. CPU use while idle can consequently be higher. Tight uses compression level 2 and quality 8; photographic regions may use high-quality JPEG, while flat-color regions can use lossless encodings. WebSocket deflate is disabled to avoid compressing the already-compressed VNC stream again.
+
+Input is consumed from a bounded queue. Consecutive pending hover positions are replaced by the newest position; compatible wheel deltas are summed. Click/key/text ordering, drag paths and command acknowledgements are retained. This prevents stale hover events from holding up later typing. Actual responsiveness also depends on server load and network latency/bandwidth. The remote resolution is capped at 1600×900 to reduce pixel processing and transfer compared with Full HD.
+
+The Xvfb layout reserves twelve non-overlapping window slots. The initial browser size is 1600×900. Individual viewports adapt to the available viewer area, from 280×200 to 1600×900; larger clients display the framebuffer scaled proportionally. A 1920×1080 viewer in focus mode receives a 1600×900 framebuffer that fills the available area, processing about 31% fewer pixels than native Full HD. With the toolbar visible, its width is reserved outside the browser area. Mobile clients still get a responsive viewport. Closing a tab frees its slot. This is a shared browser-session application, not a security boundary between untrusted website origins: profile storage is shared by design.
 
 ## Practical limits
 
@@ -53,6 +59,8 @@ Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled
 ```sh
 docker compose exec -T app python -m tests.e2e_remote
 docker compose exec -T app python -m tests.e2e_accounts
+docker compose exec -T app python -m unittest tests.test_input_buffer
+docker compose exec -T app python -m tests.benchmark_latency --idle-seconds 65
 curl -fsS http://localhost:8000/health
 ```
 

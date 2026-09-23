@@ -40,8 +40,8 @@ async def context_info(page: Page, x: float, y: float) -> dict:
 async def handle_input(page: Page, event: dict) -> dict | None:
     kind = event.get("type")
     if kind in {"move", "down", "up"}:
-        x = max(0, min(1920, float(event.get("x", 0))))
-        y = max(0, min(1300, float(event.get("y", 0))))
+        x = max(0, min(1600, float(event.get("x", 0))))
+        y = max(0, min(900, float(event.get("y", 0))))
         await page.mouse.move(x, y)
         if kind != "move":
             button = event.get("button", "left")
@@ -51,7 +51,7 @@ async def handle_input(page: Page, event: dict) -> dict | None:
             await method(button=button, click_count=min(3, max(1, int(event.get("count", 1)))))
     elif kind == "wheel":
         if "x" in event and "y" in event:
-            await page.mouse.move(max(0, min(1920, float(event["x"]))), max(0, min(1300, float(event["y"]))))
+            await page.mouse.move(max(0, min(1600, float(event["x"]))), max(0, min(900, float(event["y"]))))
         await page.mouse.wheel(max(-2000, min(2000, float(event.get("dx", 0)))),
                                max(-2000, min(2000, float(event.get("dy", 0)))))
     elif kind == "text":
