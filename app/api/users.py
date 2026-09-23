@@ -1,4 +1,3 @@
-from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -6,30 +5,18 @@ from app.api.deps import admin_user, protected_admin
 from app.db import get_db
 from app.models import User
 from app.services.auth_service import hash_password
+from app.account_schemas import NewCredentials
+from app.services.tab_manager import tab_manager
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-class UserCreate(BaseModel):
-    username: str = Field(min_length=2, max_length=120)
-    password: str = Field(min_length=8)
+class UserCreate(NewCredentials):
     is_admin: bool = False
-
-    @field_validator("username", mode="before")
-    @classmethod
-    def trim_username(cls, value):
-        return value.strip() if isinstance(value, str) else value
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_bytes(cls, value):
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password must be at most 72 UTF-8 bytes")
-        return value
 
 @router.get("")
 def list_users(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     return [{"id": u.id, "username": u.username, "is_active": u.is_active, "is_admin": u.is_admin,
-             "tab": u.browser_tab.id if u.browser_tab else None} for u in db.query(User).order_by(User.id).all()]
+             "tab": u.browser_tab.id if u.browser_tab else None} for u in db.query(User).order_by(User.is_active.asc(), User.id.desc()).all()]
 
 @router.post("", status_code=201)
 def create_user(payload: UserCreate, _: User = Depends(protected_admin), db: Session = Depends(get_db)):
@@ -44,3 +31,31 @@ def create_user(payload: UserCreate, _: User = Depends(protected_admin), db: Ses
         raise HTTPException(status_code=409, detail="Username already exists")
     db.refresh(user)
     return {"id": user.id, "username": user.username, "is_admin": user.is_admin}
+
+
+@router.post("/{user_id}/approve")
+def approve_user(user_id: int, _: User = Depends(protected_admin), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="کاربر پیدا نشد.")
+    if not user.is_active:
+        updated = db.query(User).filter(User.id == user.id, User.username == user.username,
+            User.created_at == user.created_at, User.is_active.is_(False)).update(
+                {User.is_active: True, User.session_id: None}, synchronize_session=False)
+        db.commit()
+        if not updated:
+            raise HTTPException(status_code=409, detail="حساب تغییر کرده است؛ فهرست را تازه‌سازی کنید.")
+    return {"ok": True, "id": user.id, "is_active": True}
+
+
+@router.delete("/{user_id}")
+async def delete_user(user_id: int, admin: User = Depends(protected_admin), db: Session = Depends(get_db)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="نمی‌توانید حساب خودتان را حذف کنید.")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="کاربر پیدا نشد.")
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="حذف حساب‌های ادمین از این بخش مجاز نیست.")
+    await tab_manager.delete_user(db, user)
+    return {"ok": True}

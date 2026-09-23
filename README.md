@@ -16,6 +16,12 @@ Open http://localhost:8000. The existing `.env` is used by Compose. Admin creden
 
 Admins can open `/admin` (the gear icon in the viewer toolbar) to list accounts and create users or additional admins. This responsive page and the user-management API both enforce the admin role. Passwords require at least 8 characters and at most 72 UTF-8 bytes.
 
+Public registration is available at `/register`, linked from the login page. It always creates a regular account with `is_active=false` and no session or browser tab. A correct password still cannot log in until an admin approves the account from `/admin`. Pending accounts appear first in the list. Admin-created accounts are approved immediately; existing active accounts remain approved without a database migration.
+
+Authenticated users (including admins) can change their password at `/account`, linked from the viewer toolbar and admin header. The current password is required. A successful change invalidates all existing sessions and requires a fresh login with the new password. Password updates and logins check the previous credential state to prevent a concurrent request from reviving stale credentials. This is not a forgotten-password reset flow.
+
+Admins can delete pending or approved regular users after a confirmation dialog. Deletion removes the application account and its tab mapping, revokes its session, and closes its native browser window/VNC stream. It does **not** clear cookies, website logins or storage in the shared Chromium profile, as those belong to all users. Deletion is permanent unless recovered from a database backup. Self-deletion and deletion of administrator accounts are rejected. For public internet deployment, apply signup/login rate limits at the reverse proxy in addition to HTTPS.
+
 Every successful login rotates a persisted random session identifier for that account. Previous cookies immediately stop authorizing HTTP requests and new WebSocket connections. Existing input streams recheck before every command; idle input and VNC streams close within about half a second. The previous viewer returns to login; the admin page checks every two seconds. Failed logins do not revoke sessions. Logout invalidates the server-side session too. Multiple tabs using the same login cookie remain part of the same session, not separate logins.
 
 Startup adds the nullable `users.session_id` column to existing databases without deleting accounts or browser data. Pre-upgrade cookies require one fresh login. This affects application access, not the shared Chromium website cookies/profile.
@@ -62,6 +68,7 @@ Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled
 ```sh
 docker compose exec -T app python -m tests.e2e_remote
 docker compose exec -T app python -m tests.e2e_accounts
+docker compose exec -T app python -m tests.e2e_registration
 docker compose exec -T app python -m tests.e2e_clipboard
 docker compose exec -T app python -m unittest tests.test_clipboard_bridge
 docker compose exec -T app python -m unittest tests.test_input_buffer

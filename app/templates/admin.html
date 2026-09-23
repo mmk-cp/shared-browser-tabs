@@ -12,6 +12,7 @@
       <div><p class="admin-eyebrow">مرورگر مشترک</p><h1>مدیریت کاربران</h1><p class="muted">ورود به‌عنوان {{ user.username }}</p></div>
       <nav class="admin-actions" aria-label="ابزارهای مدیریت">
         <a class="secondary-button" href="/dashboard">بازگشت به مرورگر</a>
+        <a class="secondary-button" href="/account">تغییر رمز عبور</a>
         <button class="secondary-button" id="admin-logout">خروج</button>
       </nav>
     </header>
@@ -19,7 +20,7 @@
     <div class="admin-grid">
       <section class="admin-card" aria-labelledby="create-heading">
         <h2 id="create-heading">ساخت کاربر جدید</h2>
-        <p class="muted">مشخصات ورود را پس از ساخت، در اختیار کاربر قرار دهید.</p>
+        <p class="muted">کاربری که اینجا می‌سازید از ابتدا تأیید شده است. ثبت‌نام عمومی نیاز به تأیید شما دارد.</p>
         <form id="create-user-form">
           <label for="new-username">نام کاربری</label>
           <input id="new-username" name="username" dir="auto" autocomplete="off" minlength="2" maxlength="120" required placeholder="مثلاً user01">
@@ -33,6 +34,7 @@
       </section>
       <section class="admin-card users-card" aria-labelledby="users-heading">
         <div class="users-heading"><h2 id="users-heading">کاربران <span id="user-count" class="count-badge">۰</span></h2><button id="refresh-users" class="secondary-button">تازه‌سازی</button></div>
+        <p id="pending-summary" class="pending-summary"></p>
         <p id="users-message" class="form-message" role="status"></p>
         <ul id="users-list" class="users-list" aria-label="فهرست کاربران"></ul>
       </section>

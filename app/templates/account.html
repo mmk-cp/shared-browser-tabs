@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تغییر رمز عبور · مرورگر مشترک</title><link rel="stylesheet" href="/static/css/app.css"></head>
+<body class="auth-page"><main class="auth-card">
+  <h1>تغییر رمز عبور</h1><p class="muted">حساب {{ user.username }}</p>
+  <form id="password-form">
+    <label for="current-password">رمز عبور فعلی</label><input id="current-password" type="password" autocomplete="current-password" required>
+    <label for="new-password">رمز عبور جدید</label><input id="new-password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="password-help">
+    <small id="password-help">حداقل ۸ کاراکتر و حداکثر ۷۲ بایت.</small>
+    <label for="confirm-password">تکرار رمز جدید</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+    <p class="muted account-notice">پس از تغییر رمز، همهٔ نشست‌ها پایان می‌یابند و باید با رمز جدید وارد شوید.</p>
+    <button class="primary" type="submit">ذخیره و ورود مجدد</button>
+    <p id="password-message" class="form-message" role="status" aria-live="polite"></p>
+  </form>
+  <nav class="auth-links"><a href="/dashboard">بازگشت به مرورگر</a>{% if user.is_admin %} · <a href="/admin">مدیریت کاربران</a>{% endif %}</nav>
+</main><script src="/static/js/account.js"></script></body></html>

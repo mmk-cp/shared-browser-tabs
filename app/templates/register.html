@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ثبت‌نام · مرورگر مشترک</title><link rel="stylesheet" href="/static/css/app.css"></head>
+<body class="auth-page"><main class="auth-card">
+  <div class="logo">◈</div><h1>ساخت حساب</h1><p class="muted">پس از ثبت‌نام، ورود شما نیاز به تأیید ادمین دارد.</p>
+  <form id="register-form">
+    <label for="username">نام کاربری</label><input id="username" dir="auto" autocomplete="username" minlength="2" maxlength="120" required>
+    <label for="password">رمز عبور</label><input id="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="password-help">
+    <small id="password-help">حداقل ۸ کاراکتر و حداکثر ۷۲ بایت.</small>
+    <label for="confirm-password">تکرار رمز عبور</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+    <button class="primary" type="submit">ثبت درخواست عضویت</button>
+  </form>
+  <p id="register-message" class="form-message" role="status" aria-live="polite"></p>
+  <p class="auth-links"><a href="/login">بازگشت به ورود</a></p>
+</main><script src="/static/js/register.js"></script></body></html>

@@ -11,9 +11,12 @@ async function request(path, options = {}) {
     throw Error('نشست شما پایان یافت. دوباره وارد شوید.');
   }
   if (response.status === 403) { leaving = true; location.replace('/dashboard'); throw Error('دسترسی ادمین لازم است.'); }
-  if (response.status === 409) throw Error('این نام کاربری قبلاً ثبت شده است.');
+  if (response.status === 409 && path === '/api/users') throw Error('این نام کاربری قبلاً ثبت شده است.');
   if (response.status === 422) throw Error('نام کاربری و طول رمز عبور را بررسی کنید.');
-  if (!response.ok) throw Error('درخواست انجام نشد؛ دوباره تلاش کنید.');
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw Error(typeof data.detail === 'string' ? data.detail : 'درخواست انجام نشد؛ دوباره تلاش کنید.');
+  }
   return response.json();
 }
 
@@ -24,21 +27,46 @@ async function loadUsers() {
     const users = await request('/api/users');
     const rows = users.map(user => {
       const row = document.createElement('li');
+      row.dataset.userId = user.id;
       const identity = document.createElement('div');
       const name = document.createElement('strong'); name.textContent = user.username; name.dir = 'auto';
       const id = document.createElement('small'); id.textContent = `شناسه ${user.id.toLocaleString('fa-IR')}`;
       identity.append(name, id);
       const badges = document.createElement('div'); badges.className = 'user-badges';
       const role = document.createElement('span'); role.className = 'user-badge'; role.textContent = user.is_admin ? 'ادمین' : 'کاربر';
-      const active = document.createElement('span'); active.className = `user-badge ${user.is_active ? 'active' : ''}`; active.textContent = user.is_active ? 'فعال' : 'غیرفعال';
-      badges.append(role, active); row.append(identity, badges);
+      const active = document.createElement('span'); active.className = `user-badge ${user.is_active ? 'active' : 'pending'}`; active.textContent = user.is_active ? 'تأییدشده' : 'در انتظار تأیید';
+      badges.append(role, active);
+      const actions = document.createElement('div'); actions.className = 'user-row-actions';
+      if (!user.is_active) {
+        const approve = document.createElement('button'); approve.className = 'secondary-button approve-user'; approve.textContent = 'تأیید کاربر';
+        approve.onclick = () => perform(approve, `/api/users/${user.id}/approve`, 'POST');
+        actions.append(approve);
+      }
+      if (!user.is_admin) {
+        const remove = document.createElement('button'); remove.className = 'secondary-button delete-user'; remove.textContent = 'حذف';
+        remove.onclick = () => {
+          if (confirm(`حساب «${user.username}» و تب آن حذف شود؟ این کار قابل بازگشت نیست. کوکی‌های مرورگر مشترک پاک نمی‌شوند.`))
+            perform(remove, `/api/users/${user.id}`, 'DELETE');
+        };
+        actions.append(remove);
+      }
+      const detail = document.createElement('div'); detail.className = 'user-row-detail'; detail.append(badges, actions);
+      row.append(identity, detail);
       return row;
     });
     $('users-list').replaceChildren(...rows);
     $('user-count').textContent = users.length.toLocaleString('fa-IR');
+    const pending = users.filter(user => !user.is_active).length;
+    $('pending-summary').textContent = pending ? `${pending.toLocaleString('fa-IR')} درخواست در انتظار تأیید` : 'درخواست تأییدنشده‌ای وجود ندارد.';
     $('users-message').textContent = users.length ? '' : 'هنوز کاربری ثبت نشده است.';
   } catch (error) { $('users-message').textContent = error.message; }
   finally { $('refresh-users').disabled = false; }
+}
+
+async function perform(button, path, method) {
+  button.disabled = true;
+  try { await request(path, {method}); await loadUsers(); }
+  catch (error) { $('users-message').textContent = error.message; button.disabled = false; }
 }
 
 $('create-user-form').addEventListener('submit', async event => {

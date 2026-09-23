@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from playwright.async_api import Page
+from fastapi import HTTPException
 from app.models import BrowserTab, User
 from app.services.browser_manager import BrowserManager
 from app.services.stream_manager import StreamManager
@@ -69,6 +70,12 @@ class TabManager:
 
     async def get_or_create(self, db: Session, user: User) -> BrowserTab:
         async with self._lock:
+            # A delete or replacement login may have happened while this
+            # request waited for another user's browser window to be created.
+            session_id = user.session_id
+            fresh = db.query(User).filter(User.id == user.id, User.is_active.is_(True)).populate_existing().first()
+            if not fresh or fresh.session_id != session_id:
+                raise HTTPException(status_code=401, detail="Authentication required")
             tab = db.query(BrowserTab).filter(BrowserTab.user_id == user.id, BrowserTab.is_active.is_(True)).first()
             if tab:
                 page = self.browser.get_page(tab.page_id)
@@ -96,6 +103,30 @@ class TabManager:
         await self.browser.close_page(tab.page_id)
         db.delete(tab)
         db.commit()
+
+    async def delete_user(self, db: Session, user: User) -> None:
+        target_id, target_name, target_created = user.id, user.username, user.created_at
+        async with self._lock:
+            # Re-resolve after waiting: SQLite may reuse a removed row ID for
+            # a new registration. Never delete a different replacement account.
+            user = db.query(User).filter(User.id == target_id, User.username == target_name,
+                User.created_at == target_created).populate_existing().first()
+            if not user:
+                raise HTTPException(status_code=404, detail="کاربر پیدا نشد یا تغییر کرده است.")
+            if user.is_admin:
+                raise HTTPException(status_code=400, detail="حذف حساب‌های ادمین از این بخش مجاز نیست.")
+            tab = db.query(BrowserTab).filter(BrowserTab.user_id == user.id).first()
+            page_id = tab.page_id if tab else None
+            # Commit account/session removal before potentially slow browser
+            # cleanup, and keep creation serialized to avoid orphan windows.
+            db.delete(user)
+            db.commit()
+            if page_id:
+                for cleanup in (self.streams.stop, self.browser.close_page):
+                    try:
+                        await asyncio.wait_for(cleanup(page_id), timeout=5)
+                    except Exception:
+                        logger.exception("DELETED_USER_WINDOW_CLEANUP_FAILED page=%s", page_id)
 
 
 tab_manager: Optional[TabManager] = None

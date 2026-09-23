@@ -1,3 +1,12 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shared Browser · Login</title><link rel="stylesheet" href="/static/css/app.css"></head>
-<body class="auth-page"><main class="auth-card"><div class="logo">◈</div><h1>Shared Browser</h1><p class="muted">Sign in to your private browser tab</p><form id="login-form"><label>Username<input id="username" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button class="primary" type="submit">Sign in</button><p id="error" class="error"></p></form></main><script src="/static/js/login.js"></script></body></html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ورود · مرورگر مشترک</title><link rel="stylesheet" href="/static/css/app.css"></head>
+<body class="auth-page"><main class="auth-card">
+  <div class="logo">◈</div><h1>مرورگر مشترک</h1><p class="muted">وارد حساب خود شوید</p>
+  <form id="login-form">
+    <label for="username">نام کاربری</label><input id="username" dir="auto" autocomplete="username" maxlength="120" required>
+    <label for="password">رمز عبور</label><input id="password" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">ورود</button><p id="error" class="error" role="status" aria-live="polite"></p>
+  </form>
+  <p class="auth-links">حساب ندارید؟ <a href="/register">ثبت‌نام</a></p>
+</main><script src="/static/js/login.js"></script></body></html>

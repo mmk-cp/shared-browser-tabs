@@ -80,6 +80,21 @@ async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    with SessionLocal() as db:
+        if get_user_from_request(request, db): return RedirectResponse("/dashboard")
+    return templates.TemplateResponse("register.html", {"request": request})
+
+
+@app.get("/account", response_class=HTMLResponse)
+async def account_page(request: Request):
+    with SessionLocal() as db:
+        user = get_user_from_request(request, db)
+    if not user: return RedirectResponse("/login")
+    return templates.TemplateResponse("account.html", {"request": request, "user": user})
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     with SessionLocal() as db:
