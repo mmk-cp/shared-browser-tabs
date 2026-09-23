@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.db import SessionLocal
-from app.services.auth_service import SESSION_COOKIE, serializer, settings
+from app.services.auth_service import SESSION_COOKIE, get_user_from_token
 from app.services.tab_manager import tab_manager
 from app.services.stream_manager import stream_manager
 from app.services.input_manager import handle_input
@@ -15,9 +15,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def watch_session(websocket: WebSocket):
+    """Revoke already-open streams too, including idle/background viewers."""
+    while True:
+        if not await authenticated_user(websocket):
+            await websocket.close(code=4401, reason="Session ended")
+            return
+        await asyncio.sleep(0.5)
+
+
 @router.websocket("/ws/input")
 async def input_socket(websocket: WebSocket):
     user = await authenticated_user(websocket)
+    if not user:
+        await websocket.close(code=4401)
+        return
     origin = websocket.headers.get("origin")
     if not user or not user.is_active or not origin or urlsplit(origin).netloc != websocket.headers.get("host"):
         await websocket.close(code=4403)
@@ -30,9 +42,15 @@ async def input_socket(websocket: WebSocket):
         await websocket.close(code=1011)
         return
     await websocket.accept()
+    guard = asyncio.create_task(watch_session(websocket))
     try:
         while True:
             event = await websocket.receive_json()
+            # Reject queued input immediately after a replacement login,
+            # without waiting for the periodic stream-revocation check.
+            if not await authenticated_user(websocket):
+                await websocket.close(code=4401, reason="Session ended")
+                break
             if not isinstance(event, dict):
                 continue
             try:
@@ -49,6 +67,8 @@ async def input_socket(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
+        guard.cancel()
+        await asyncio.gather(guard, return_exceptions=True)
         if not page.is_closed():
             try:
                 await handle_input(page, {"type": "release"})
@@ -57,16 +77,8 @@ async def input_socket(websocket: WebSocket):
 
 
 async def authenticated_user(websocket: WebSocket):
-    token = websocket.cookies.get(SESSION_COOKIE)
-    if not token:
-        return None
-    try:
-        data = serializer.loads(token, max_age=settings.session_max_age)
-    except Exception:
-        return None
     with SessionLocal() as db:
-        from app.models import User
-        return db.get(User, int(data.get("user_id", 0)))
+        return get_user_from_token(websocket.cookies.get(SESSION_COOKIE), db)
 
 
 @router.websocket("/ws/vnc")
@@ -116,6 +128,7 @@ async def vnc_socket(websocket: WebSocket):
     tasks = {
         asyncio.create_task(browser_to_vnc()),
         asyncio.create_task(vnc_to_browser()),
+        asyncio.create_task(watch_session(websocket)),
     }
     try:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)

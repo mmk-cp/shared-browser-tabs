@@ -18,10 +18,19 @@ const screen = $('vnc-screen'), workspace = $('workspace'), state = $('connectio
 const urlPanel = $('url-panel'), clipboardPanel = $('clipboard-panel'), menu = $('context-menu');
 const mobileInput = $('mobile-input');
 let rfb, input, reconnectTimer, resizeTimer, toastTimer, requestId = 0;
-let remoteSize = {width:1440, height:900}, context = {}, lastUrl = '';
+let remoteSize = {width:1920, height:1080}, context = {}, lastUrl = '';
 let stopped = false, connected = false, composing = false;
 const pending = new Map();
 const csrf = () => decodeURIComponent(document.cookie.split('; ').find(x => x.startsWith('shared_browser_csrf='))?.split('=')[1] || '');
+
+function sessionEnded() {
+  stopped = true; connected = false;
+  clearTimeout(reconnectTimer);
+  if (input) { input.onclose = null; input.close(); }
+  if (rfb) rfb.disconnect();
+  screen.replaceChildren();
+  location.replace('/login?reason=session-ended');
+}
 
 function notify(message) {
   $('toast').textContent = message;
@@ -31,7 +40,7 @@ function notify(message) {
 }
 async function api(path, options = {}) {
   const response = await fetch(path, {...options, headers:{'Content-Type':'application/json', 'X-CSRF-Token':csrf(), ...options.headers}});
-  if (response.status === 401) { stopped = true; location.href = '/login'; throw Error('دوباره وارد شوید'); }
+  if (response.status === 401) { sessionEnded(); throw Error('دوباره وارد شوید'); }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.detail || 'درخواست انجام نشد');
   return data;
@@ -67,7 +76,7 @@ function togglePanel(panel, button) {
 async function resizeRemote() {
   if (input?.readyState !== WebSocket.OPEN) return;
   const box = screen.getBoundingClientRect();
-  const ratio = Math.min(1, 1800 / box.width, 1300 / box.height);
+  const ratio = Math.min(1, 1920 / box.width, 1300 / box.height);
   const size = {width:Math.max(280, Math.round(box.width*ratio)), height:Math.max(200, Math.round(box.height*ratio))};
   if (size.width === remoteSize.width && size.height === remoteSize.height) return;
   try { remoteSize = await command({type:'resize', ...size}); }
@@ -100,7 +109,10 @@ async function connect() {
       if (job) { clearTimeout(job.timer); pending.delete(message.id); message.error ? job.reject(Error(message.error)) : job.resolve(message.result); }
     };
     await new Promise((resolve,reject) => { input.onopen = resolve; input.onerror = () => reject(Error('اتصال ورودی برقرار نشد')); });
-    input.onclose = reconnect;
+    input.onclose = event => event.code === 4401 ? sessionEnded() : reconnect();
+    // A prior client may have left this shared page at a different size.
+    // Always negotiate dimensions on connection, even at the default size.
+    remoteSize = {width:0, height:0};
     await resizeRemote();
     rfb = new WindowRFB(screen, `${base}/ws/vnc`, {shared:true});
     rfb.viewOnly = true; // Server also enforces this; X11 focus is desktop-wide.

@@ -1,14 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.db import Base, SessionLocal, engine
+from app.db import SessionLocal, initialize_database
 from app.models import User
 from app.services.auth_service import hash_password, get_user_from_request
 from app.services.browser_manager import browser_manager
@@ -32,7 +32,7 @@ from app.websocket import browser_ws
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    initialize_database()
     with SessionLocal() as db:
         if not db.query(User).first():
             admin = User(username=settings.admin_username, password_hash=hash_password(settings.admin_password), is_admin=True)
@@ -86,3 +86,14 @@ async def dashboard(request: Request):
         user = get_user_from_request(request, db)
     if not user: return RedirectResponse("/login")
     return templates.TemplateResponse("dashboard.html", {"request": request, "user": user})
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    with SessionLocal() as db:
+        user = get_user_from_request(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator access required")
+    return templates.TemplateResponse("admin.html", {"request": request, "user": user})

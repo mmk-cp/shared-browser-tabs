@@ -156,6 +156,26 @@ async def main():
             await views[0].wait_for_function("document.querySelector('#vnc-screen').clientWidth===innerWidth")
             await views[0].click('#restore-tools')
             print('PASS in-page maximize', flush=True)
+            # Full HD must be actual remote/canvas pixels, not a stretched
+            # lower-resolution image. Exercise input beyond the old 1800 cap.
+            await views[0].set_viewport_size({'width':1920,'height':1080})
+            await views[0].click('#maximize')
+            await remotes[0].wait_for_function('innerWidth === 1920 && innerHeight === 1080')
+            await views[0].wait_for_function("() => {const c=document.querySelector('#vnc-screen canvas');return c?.width===1920 && c.height===1080 && c.getBoundingClientRect().width===1920}")
+            await remotes[0].evaluate("""() => {
+                const button = document.createElement('button'); button.id = 'fhd-edge';
+                button.style.cssText = 'position:fixed;right:8px;bottom:8px;width:64px;height:40px;background:rgb(0,200,100);border:0';
+                button.onclick = () => button.dataset.clicked = 'yes';
+                document.body.append(button);
+            }""")
+            await views[0].wait_for_function("() => {const c=document.querySelector('#vnc-screen canvas'); const p=c.getContext('2d').getImageData(1880,1052,1,1).data; return p[0]<40 && p[1]>150 && p[2]<140}")
+            await click_remote(views[0], remotes[0], '#fhd-edge')
+            await remotes[0].wait_for_function("document.querySelector('#fhd-edge').dataset.clicked==='yes'")
+            await views[0].screenshot(path=str(artifacts/'full-hd.png'))
+            await remotes[0].evaluate("document.querySelector('#fhd-edge').remove()")
+            await views[0].click('#restore-tools')
+            await remotes[0].wait_for_function('innerWidth === 1874 && innerHeight === 1080')
+            print('PASS native 1920x1080 framebuffer and right-edge mouse input', flush=True)
             # Mobile viewport and touch session.
             mobile_context = await test_browser.new_context(viewport={'width':390,'height':844}, is_mobile=True, has_touch=True, device_scale_factor=2)
             await mobile_context.add_cookies(await views[0].context.cookies())

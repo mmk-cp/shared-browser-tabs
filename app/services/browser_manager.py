@@ -266,12 +266,12 @@ class BrowserManager:
         raise RuntimeError(f"Could not find native Chromium window {marker}: {last_output}")
 
     async def resize_page(self, page_id: str, width: int, height: int) -> dict:
-        width, height = max(280, min(1800, width)), max(200, min(1300, height))
+        width, height = max(280, min(1920, width)), max(200, min(1300, height))
         size = {"width": width, "height": height}
         if self.window_sizes.get(page_id) == size:
             return size
         xid, slot = self.window_ids[page_id], self.window_slots[page_id]
-        x, y = (slot % 4) * 1900, (slot // 4) * 1400
+        x, y = (slot % 4) * 2048, (slot // 4) * 1400
         process = await asyncio.create_subprocess_exec(
             "xdotool", "windowmove", "--sync", str(xid), str(x), str(y),
             "windowsize", str(xid), str(width), str(height),

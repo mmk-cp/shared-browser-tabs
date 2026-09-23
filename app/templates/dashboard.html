@@ -23,6 +23,9 @@
       <button id="keyboard-toggle" class="rail-button" title="کیبورد" aria-label="کیبورد">⌨</button>
       <button id="maximize" class="rail-button" title="بزرگ کردن نمایشگر" aria-label="بزرگ کردن نمایشگر">⛶</button>
       <span class="rail-spacer"></span>
+      {% if user.is_admin %}
+      <a href="/admin" class="rail-button admin-link" title="مدیریت کاربران" aria-label="مدیریت کاربران">⚙</a>
+      {% endif %}
       <span id="online-dot" class="online-dot" title="وضعیت اتصال"></span>
       <button id="logout" class="rail-button danger" title="خروج" aria-label="خروج">↪</button>
     </aside>

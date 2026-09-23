@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>مدیریت کاربران · مرورگر مشترک</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="admin-page">
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div><p class="admin-eyebrow">مرورگر مشترک</p><h1>مدیریت کاربران</h1><p class="muted">ورود به‌عنوان {{ user.username }}</p></div>
+      <nav class="admin-actions" aria-label="ابزارهای مدیریت">
+        <a class="secondary-button" href="/dashboard">بازگشت به مرورگر</a>
+        <button class="secondary-button" id="admin-logout">خروج</button>
+      </nav>
+    </header>
+    <p class="session-notice">هر حساب فقط یک نشست ورود فعال دارد. ورود جدید، دسترسی و اتصال قبلی همان حساب را قطع می‌کند.</p>
+    <div class="admin-grid">
+      <section class="admin-card" aria-labelledby="create-heading">
+        <h2 id="create-heading">ساخت کاربر جدید</h2>
+        <p class="muted">مشخصات ورود را پس از ساخت، در اختیار کاربر قرار دهید.</p>
+        <form id="create-user-form">
+          <label for="new-username">نام کاربری</label>
+          <input id="new-username" name="username" dir="auto" autocomplete="off" minlength="2" maxlength="120" required placeholder="مثلاً user01">
+          <label for="new-password">رمز عبور</label>
+          <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="password-help">
+          <small id="password-help">حداقل ۸ کاراکتر؛ حداکثر ۷۲ بایت برای رمزهای فارسی یا انگلیسی.</small>
+          <label class="checkbox-label"><input type="checkbox" id="new-is-admin"> دسترسی ادمین (امکان ساخت کاربران)</label>
+          <button class="primary" id="create-user" type="submit">ساخت کاربر</button>
+          <p id="create-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+      <section class="admin-card users-card" aria-labelledby="users-heading">
+        <div class="users-heading"><h2 id="users-heading">کاربران <span id="user-count" class="count-badge">۰</span></h2><button id="refresh-users" class="secondary-button">تازه‌سازی</button></div>
+        <p id="users-message" class="form-message" role="status"></p>
+        <ul id="users-list" class="users-list" aria-label="فهرست کاربران"></ul>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>

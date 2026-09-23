@@ -1,5 +1,4 @@
 import secrets
-from datetime import datetime, timezone
 from typing import Optional
 import bcrypt
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -27,7 +26,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def set_auth_cookies(response: Response, user: User) -> None:
-    token = serializer.dumps({"user_id": user.id, "username": user.username})
+    token = serializer.dumps({"user_id": user.id, "session_id": user.session_id})
     csrf = secrets.token_urlsafe(32)
     secure = settings.cookie_secure or settings.app_env == "production"
     response.set_cookie(SESSION_COOKIE, token, max_age=settings.session_max_age, httponly=True,
@@ -42,15 +41,24 @@ def clear_auth_cookies(response: Response) -> None:
 
 
 def get_user_from_request(request: Request, db: Session) -> Optional[User]:
-    token = request.cookies.get(SESSION_COOKIE)
+    return get_user_from_token(request.cookies.get(SESSION_COOKIE), db)
+
+
+def get_user_from_token(token: str | None, db: Session) -> Optional[User]:
     if not token:
         return None
     try:
         data = serializer.loads(token, max_age=settings.session_max_age)
-    except (BadSignature, SignatureExpired):
+        session_id = data.get("session_id")
+        user_id = int(data.get("user_id", 0))
+    except (BadSignature, SignatureExpired, ValueError, TypeError, AttributeError):
         return None
-    user = db.get(User, int(data.get("user_id", 0)))
-    return user if user and user.is_active else None
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    user = db.get(User, user_id)
+    if not user or not user.is_active or not user.session_id:
+        return None
+    return user if secrets.compare_digest(session_id, user.session_id) else None
 
 
 def csrf_valid(request: Request) -> bool:
