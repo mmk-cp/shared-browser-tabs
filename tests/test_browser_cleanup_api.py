@@ -102,5 +102,16 @@ class CleanupAPITests(unittest.IsolatedAsyncioTestCase):
             self.browser.stop.assert_awaited_once(); self.browser.start.assert_awaited_once()
             self.tabs.restore_pages.assert_awaited_once()
 
+    async def test_proxy_probe_permissions_and_cooldown(self):
+        proxy=SimpleNamespace(status=lambda:{'enabled':True,'running':True},test_connection=AsyncMock(return_value={'ok':True}))
+        with patch.object(routes,'proxy_manager',proxy),patch.object(routes,'proxy_last_test',0):
+            self.login(False)
+            self.assertEqual((await self.client.post('/api/browser/proxy/test')).status_code,403)
+            self.login()
+            self.assertEqual((await self.client.post('/api/browser/proxy/test',headers={'X-CSRF-Token':''})).status_code,403)
+            self.assertEqual((await self.client.post('/api/browser/proxy/test')).status_code,200)
+            self.assertEqual((await self.client.post('/api/browser/proxy/test')).status_code,429)
+            proxy.test_connection.assert_awaited_once()
+
 
 if __name__=='__main__': unittest.main()

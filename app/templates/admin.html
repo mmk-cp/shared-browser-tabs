@@ -28,10 +28,28 @@
         <textarea id="proxy-uri" dir="ltr" rows="3" maxlength="16384" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="vless://…" aria-describedby="proxy-help"></textarea>
         <small id="proxy-help">لینک خام را وارد کنید، نه لینک قالب‌بندی‌شده. WS، TCP و gRPC با TLS یا Reality پشتیبانی می‌شوند. برای نگه‌داشتن کانفیگ ذخیره‌شده، این کادر را خالی بگذارید؛ لینک محرمانه دوباره نمایش داده نمی‌شود.</small>
         <p id="proxy-warning" class="form-message" hidden>هشدار: این کانفیگ بررسی گواهی TLS را غیرفعال می‌کند (allowInsecure). فقط با آگاهی از خطر استفاده کنید.</p>
+        <label for="dns-mode">DNS مرورگر و پروکسی</label>
+        <select id="dns-mode">
+          <option value="system">پیش‌فرض سیستم</option>
+          <option value="cloudflare">Cloudflare · 1.1.1.1</option>
+          <option value="google">Google · 8.8.8.8</option>
+          <option value="quad9">Quad9 · 9.9.9.9</option>
+          <option value="custom">IP دلخواه DNS</option>
+        </select>
+        <div id="dns-custom" hidden>
+          <label for="dns-servers">IP سرور DNS؛ هر آدرس در یک خط یا با کاما، حداکثر ۳ آدرس</label>
+          <textarea id="dns-servers" rows="3" dir="ltr" maxlength="512" spellcheck="false" placeholder="8.8.8.8&#10;1.1.1.1"></textarea>
+        </div>
+        <small>DNS معمولی روی پورت ۵۳ است؛ DoH استفاده نمی‌شود. نام سرور VPN و دامنه‌های سایت‌ها با همین DNSها پیدا می‌شوند. درخواست DNS برای راه‌اندازی اتصال، مستقیم به IP انتخابی می‌رود؛ ترافیک سایت‌ها در صورت روشن‌بودن VPN از تونل عبور می‌کند. این تنظیم فقط داخل کانتینر برنامه اعمال می‌شود، نه روی میزبان. DNS باید از سرور قابل دسترسی باشد؛ برای نام‌های شبکهٔ داخلی، DNS همان شبکه را وارد کنید. localhost و IPهای داخلی همچنان مستقیم‌اند.</small>
         <p class="muted">ذخیره و اعمال، مرورگر همه را راه‌اندازی مجدد می‌کند؛ ابتدا کار ذخیره‌نشده را ذخیره کنید. کوکی‌ها و ورود سایت‌ها پاک نمی‌شوند. اگر پروکسی قطع شود، سایت‌های عمومی خودکار به اتصال مستقیم برنمی‌گردند.</p>
         <button type="submit" id="proxy-save" class="primary" disabled>ذخیره و راه‌اندازی مجدد مرورگر</button>
         <p id="proxy-message" class="form-message" role="status" aria-live="polite"></p>
       </form>
+      <div class="proxy-test-box">
+        <button type="button" id="proxy-test" class="secondary-button" disabled>تست اتصال VPN</button>
+        <small>تست فقط تنظیمات ذخیره‌شده را بررسی می‌کند، نه تغییرات ذخیره‌نشدهٔ فرم. یک درخواست به api.ipify.org از مسیر VPN می‌فرستد؛ مرورگر ری‌استارت نمی‌شود. موفقیت تست تضمین عبور از تأیید Cloudflare یا بازشدن همهٔ سایت‌ها نیست.</small>
+        <p id="proxy-test-result" class="form-message" role="status" aria-live="polite"></p>
+      </div>
     </section>
     <section class="admin-card danger-card" aria-labelledby="clear-browser-heading">
       <h2 id="clear-browser-heading">پاک‌سازی داده‌های مرورگر</h2>

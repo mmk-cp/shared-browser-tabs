@@ -117,6 +117,12 @@ Status reports local process readiness, not end-to-end reachability of the upstr
 
 ### Focused proxy checks
 
+The admin network form supports system DNS or up to three **plain DNS server IPs**, such as `8.8.8.8`, `1.1.1.1`, or a LAN resolver. DoH is disabled in Chromium; old secure templates are removed. Known prior DoH provider selections migrate to their IPs (Google → 8.8.8.8, Cloudflare → 1.1.1.1, Quad9 → 9.9.9.9). Saving restarts Chromium/Xray without clearing cookies. The selection applies to the **container's** `/etc/resolv.conf`, so browser direct access and VPN bootstrap both use it. The original Docker resolver is retained only in `/dev/shm/shared-browser-system-resolv.conf` for restoring system mode and is recaptured when the container is recreated. The host resolver is never modified; custom DNS is refused outside Docker. Standard Compose/container root privileges suffice; a read-only `/etc/resolv.conf` is not supported.
+
+With VPN on, Xray explicitly uses the same DNS IPs for both its VLESS server address and website destinations (`ForceIP`). Plain DNS queries go directly to the selected resolver on port 53, not recursively through the VPN they need to initialize. Website traffic still goes through VLESS. No different public resolver or DoH fallback is silently substituted. The selected resolver must be reachable from the container; if blocked, choose a reachable DNS. Private IPs/localhost remain direct, and private domain names require an appropriate LAN DNS. This is not a DNS-tunneling protocol or DNS-leak anonymity feature. API DNS shape: `{"mode":"custom","servers":["8.8.8.8","1.1.1.1"]}`; system mode uses `{"mode":"system","servers":[]}`.
+
+**تست اتصال VPN** sends one bounded HTTPS request to `api.ipify.org` through the saved local HTTP proxy, displaying the observed exit IP, HTTP status, and request duration (not ICMP ping). It does not restart Chromium or apply unsaved form fields. It is admin-only, CSRF-protected, limited to one test at a time/10-second cooldown, and has a 12-second total deadline. There is no direct fallback. Success demonstrates that this test destination was reached, not that every website/CAPTCHA will work; an HTTP error is distinguished from a transport timeout.
+
 ```sh
 docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_proxy tests.test_browser_cleanup_api'
 docker compose exec -T app timeout 30s python -m tests.check_xray_config

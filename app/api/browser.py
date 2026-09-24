@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import time
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import protected_admin, current_user, admin_user
 from app.services.proxy_manager import proxy_manager, vless_config, normalize_vless_uri
+from app.services.browser_dns import DNSSettings
 from app.db import get_db, SessionLocal
 from app.models import User
 from app.services.browser_manager import browser_manager
@@ -15,11 +17,13 @@ from app.services.stream_manager import stream_manager
 router = APIRouter(prefix="/api/browser", tags=["browser"])
 logger = logging.getLogger(__name__)
 maintenance_task = None
+proxy_test_lock = asyncio.Lock()
+proxy_last_test = 0.0
 
 
 async def maintenance(action, user, proxy_config=None):
     global maintenance_task
-    if maintenance_task and not maintenance_task.done():
+    if proxy_test_lock.locked() or (maintenance_task and not maintenance_task.done()):
         raise HTTPException(409, 'یک عملیات مرورگر در حال انجام است؛ کمی صبر کنید.')
 
     async def run():
@@ -74,6 +78,7 @@ class ProxySettings(BaseModel):
     model_config = ConfigDict(extra='forbid')
     enabled: bool
     uri: str = Field(default='', max_length=16384)
+    dns: DNSSettings | None = None
 
 
 @router.get('/proxy')
@@ -94,8 +99,28 @@ async def update_proxy(payload: ProxySettings, user: User = Depends(protected_ad
             vless_config(uri)
         except ValueError as error:
             raise HTTPException(400, str(error)) from None
-    await maintenance('proxy', user, {'enabled': payload.enabled, 'uri': uri})
+    candidate = {'enabled': payload.enabled, 'uri': uri}
+    if payload.dns is not None:
+        candidate['dns'] = payload.dns.model_dump()
+    elif 'dns' in proxy_manager.saved:
+        candidate['dns'] = proxy_manager.saved['dns']
+    await maintenance('proxy', user, candidate)
     return proxy_manager.status()
+
+
+@router.post('/proxy/test')
+async def test_proxy(user: User = Depends(protected_admin)):
+    global proxy_last_test
+    if proxy_test_lock.locked() or (maintenance_task and not maintenance_task.done()):
+        raise HTTPException(409, 'عملیات دیگری در حال انجام است؛ کمی صبر کنید.')
+    status = proxy_manager.status()
+    if not status['enabled'] or not status['running']:
+        raise HTTPException(400, 'ابتدا VPN را ذخیره و روشن کنید؛ سرویس پروکسی باید در حال اجرا باشد.')
+    if time.monotonic() - proxy_last_test < 10:
+        raise HTTPException(429, 'بین دو تست حداقل ۱۰ ثانیه فاصله بگذارید.')
+    async with proxy_test_lock:
+        proxy_last_test = time.monotonic()
+        return await proxy_manager.test_connection()
 
 @router.get("/status")
 def status(user: User = Depends(current_user)):

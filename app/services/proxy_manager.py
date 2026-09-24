@@ -7,10 +7,14 @@ import os
 import re
 import tempfile
 import uuid
+import time
+import ipaddress
+import httpx
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from app.config import get_settings
+from app.services.browser_dns import dns_settings, configure_xray_dns, configure_container_dns
 
 logger = logging.getLogger(__name__)
 PORT = 10808
@@ -117,6 +121,8 @@ class ProxyManager:
                     vless_config(data['uri'])
                 if data['enabled'] and not data['uri']:
                     raise ValueError()
+                if 'dns' in data:
+                    data['dns'] = dns_settings(data)
                 self.saved = data
             except Exception:
                 # Fail closed, but keep the admin panel available to repair it.
@@ -128,7 +134,7 @@ class ProxyManager:
         summary = vless_config(self.saved['uri'])[1] if self.saved['uri'] else {}
         return {'enabled': self.saved['enabled'], 'configured': bool(self.saved['uri']),
                 'running': self.process is not None and self.process.returncode is None,
-                'load_failed': self.load_failed, **summary}
+                'load_failed': self.load_failed, 'dns': dns_settings(self.saved), **summary}
 
     def browser_args(self):
         if not self.saved['enabled']:
@@ -150,9 +156,11 @@ class ProxyManager:
             self.runtime = None
 
     async def start(self):
+        configure_container_dns(self.saved)
         if not self.saved['enabled']:
             return
         config, _ = vless_config(self.saved['uri'])
+        configure_xray_dns(config, self.saved)
         self.runtime = tempfile.TemporaryDirectory(prefix='sbt-proxy-', dir='/dev/shm')
         path = Path(self.runtime.name) / 'config.json'
         with open(path, 'x', opener=lambda name, flags: os.open(name, flags, 0o600)) as file:
@@ -186,6 +194,7 @@ class ProxyManager:
             raise
 
     async def apply(self, candidate):
+        dns_settings(candidate)
         previous = self.saved
         await self.stop()
         self.saved = candidate
@@ -211,6 +220,37 @@ class ProxyManager:
             except Exception:
                 logger.error('PROXY_ROLLBACK_START_FAILED; browser remains fail-closed')
             raise
+
+    async def test_connection(self):
+        """One bounded HTTPS request through the saved proxy; no direct fallback."""
+        started = time.monotonic()
+        result = {'ok': False, 'target': 'https://api.ipify.org?format=json',
+                  'http_status': None, 'ip': None}
+        try:
+            async with asyncio.timeout(12):
+                async with httpx.AsyncClient(proxy=f'http://127.0.0.1:{PORT}', trust_env=False,
+                                             timeout=10, follow_redirects=False) as client:
+                    async with client.stream('GET', result['target'], headers={'Accept': 'application/json'}) as response:
+                        result['http_status'] = response.status_code
+                        if response.status_code != 200:
+                            result['message'] = f'سرویس تست پاسخ HTTP {response.status_code} داد؛ این نتیجه به‌تنهایی به معنی قطع VPN نیست.'
+                        else:
+                            body = bytearray()
+                            async for chunk in response.aiter_bytes():
+                                body.extend(chunk)
+                                if len(body) > 4096:
+                                    raise ValueError('oversized test response')
+                            result['ip'] = str(ipaddress.ip_address(json.loads(body)['ip']))
+                            result['ok'] = True
+                            result['message'] = 'درخواست HTTPS از پروکسی عبور کرد و IP خروجی دریافت شد.'
+        except (asyncio.TimeoutError, httpx.TimeoutException):
+            result['message'] = 'در مهلت ۱۲ ثانیه پاسخی دریافت نشد؛ VPN، DNS یا سرویس تست را بررسی کنید.'
+        except httpx.HTTPError:
+            result['message'] = 'ارتباط HTTPS از مسیر پروکسی برقرار نشد؛ تنظیمات VPN، DNS و دسترسی شبکه را بررسی کنید.'
+        except (ValueError, KeyError, TypeError):
+            result['message'] = 'پاسخ سرویس تست معتبر نبود؛ IP خروجی تأیید نشد.'
+        result['elapsed_ms'] = round((time.monotonic() - started) * 1000)
+        return result
 
 
 proxy_manager = ProxyManager()

@@ -66,7 +66,7 @@
 .admin-card h2{margin:0 0 12px;font-size:20px}.admin-card .muted{font-size:13px;margin-bottom:20px}
 .admin-card small{display:block;color:#a0b1be;font-size:12px;margin-top:8px}
 .checkbox-label{display:flex;align-items:center;gap:10px;margin:20px 0}.checkbox-label input{width:18px;height:18px;accent-color:#58d8ad;flex-shrink:0}
-.form-message{font-size:13px;min-height:20px;color:#ffb3a8;overflow-wrap:anywhere}.form-message.success{color:#6de5b9}
+.proxy-card select{width:100%;padding:12px;border:1px solid #365064;border-radius:10px;background:#0b141c;color:#edf5fa;font:inherit}.proxy-test-box{border-top:1px solid #365064;margin-top:16px;padding-top:16px}.proxy-test-box small{margin-top:12px}#proxy-test-result{white-space:pre-line}.form-message{font-size:13px;min-height:20px;color:#ffb3a8;overflow-wrap:anywhere}.form-message.success{color:#6de5b9}
 .users-heading h2{margin:0}.count-badge{display:inline-block;font-size:13px;padding:2px 9px;border-radius:20px;background:#263b4b;color:#c9dce9}
 .users-list{list-style:none;padding:0;margin:0}.users-list li{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 0;border-bottom:1px solid #293d4d}.users-list li:last-child{border-bottom:0}
 .users-list li>div:first-child{min-width:0}.users-list strong{display:block;overflow-wrap:anywhere}.user-badges{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}

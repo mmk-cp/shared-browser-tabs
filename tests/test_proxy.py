@@ -6,11 +6,41 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.parse import urlencode
 from app.services.proxy_manager import ProxyManager, vless_config, BYPASS
+from app.services.browser_dns import DNSSettings, chromium_dns_policy, configure_xray_dns, configure_container_dns, dns_settings
+import httpx
 
 LINK = 'vless://00000000-0000-4000-8000-000000000001@example.com:443?'
 
 
 class VlessTests(unittest.TestCase):
+    def test_dns_validation_and_both_resolvers(self):
+        saved={'dns':{'mode':'custom','servers':['8.8.8.8','1.1.1.1']}}
+        self.assertEqual(chromium_dns_policy(saved),{'DnsOverHttpsMode':'off'})
+        config,_=vless_config(LINK+'security=tls')
+        configure_xray_dns(config,saved)
+        self.assertEqual(config['outbounds'][0]['targetStrategy'],'ForceIP')
+        self.assertEqual(config['dns']['servers'],['8.8.8.8','1.1.1.1'])
+        self.assertEqual(config['outbounds'][0]['streamSettings']['sockopt']['domainStrategy'],'ForceIP')
+        self.assertEqual(config['routing']['rules'][0]['outboundTag'],'direct')
+        self.assertEqual(chromium_dns_policy({})['DnsOverHttpsMode'],'off')
+        for value in ['8.8.8.8:53','http://dns.test/dns-query','https://dns.google/dns-query','0.0.0.0','224.0.0.1']:
+            with self.assertRaises(ValueError): DNSSettings(mode='custom',servers=[value])
+        self.assertEqual(dns_settings({'dns':{'mode':'doh','servers':['https://dns.google/dns-query']}}),
+                         {'mode':'custom','servers':['8.8.8.8']})
+
+    def test_container_dns_switch_and_restore_only_temporary_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            resolv=Path(root)/'resolv.conf'; backup=Path(root)/'system.conf'
+            original='nameserver 127.0.0.11\nsearch internal.test\n'
+            resolv.write_text(original)
+            with patch('app.services.browser_dns.RESOLV_PATH',resolv),patch('app.services.browser_dns.SYSTEM_RESOLV_PATH',backup):
+                configure_container_dns({'dns':{'mode':'custom','servers':['8.8.8.8']}})
+                self.assertIn('nameserver 8.8.8.8',resolv.read_text())
+                self.assertNotIn('127.0.0.11',resolv.read_text())
+                configure_container_dns({'dns':{'mode':'custom','servers':['1.1.1.1']}})
+                configure_container_dns({'dns':{'mode':'system','servers':[]}})
+                self.assertEqual(resolv.read_text(),original)
+
     def test_chat_formatted_link(self):
         formatted = r'vless\://00000000-[0000-4000-8000-000000000001@example.com](mailto:0000-4000-8000-000000000001@example.com):443?type=ws&security=tls#QA\_test'
         self.assertEqual(vless_config(formatted)[1]['server'], 'example.com')
@@ -43,12 +73,29 @@ class VlessTests(unittest.TestCase):
 
 
 class ProxyLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_network_probe_success_and_failure(self):
+        real_client=httpx.AsyncClient
+        def client(**kwargs):
+            self.assertEqual(kwargs['proxy'],'http://127.0.0.1:10808')
+            self.assertFalse(kwargs['trust_env'])
+            kwargs.pop('proxy')
+            return real_client(**kwargs,transport=httpx.MockTransport(lambda request:httpx.Response(200,json={'ip':'203.0.113.12'})))
+        with patch('app.services.proxy_manager.httpx.AsyncClient',side_effect=client):
+            result=await ProxyManager().test_connection()
+        self.assertTrue(result['ok']); self.assertEqual(result['ip'],'203.0.113.12')
+        def failed_client(**kwargs):
+            kwargs.pop('proxy')
+            return real_client(**kwargs,transport=httpx.MockTransport(lambda request:httpx.Response(403)))
+        with patch('app.services.proxy_manager.httpx.AsyncClient',side_effect=failed_client):
+            result=await ProxyManager().test_connection()
+        self.assertFalse(result['ok']); self.assertEqual(result['http_status'],403)
+
     async def test_start_creates_private_runtime_config_and_cleans_up_on_invalid_core_config(self):
         manager = ProxyManager()
         manager.saved = {'enabled': True, 'uri': LINK + 'security=tls&type=ws'}
         process = AsyncMock()
         process.wait.return_value = 1
-        with patch('asyncio.create_subprocess_exec', return_value=process):
+        with patch('asyncio.create_subprocess_exec', return_value=process),patch('app.services.proxy_manager.configure_container_dns'):
             with self.assertRaisesRegex(ValueError, 'Xray'):
                 await manager.start()
         self.assertIsNone(manager.runtime)

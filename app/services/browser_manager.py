@@ -14,6 +14,7 @@ from app.services.clipboard_bridge import clipboard_bridge
 from app.services.file_transfer import file_transfers
 from app.services.download_manager import downloads
 from app.services.proxy_manager import proxy_manager
+from app.services.browser_dns import write_chromium_dns_policy
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -93,6 +94,7 @@ class BrowserManager:
             self.check_available()
             if self.context is not None:
                 return self.context
+            write_chromium_dns_policy(proxy_manager.saved)
             os.makedirs(settings.browser_data_dir, exist_ok=True)
             await downloads.stop()
             artifact_dir = downloads.prepare()
