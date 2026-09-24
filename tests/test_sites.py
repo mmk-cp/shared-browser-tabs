@@ -2,6 +2,7 @@ import unittest
 from pydantic import ValidationError
 from app.api.sites import SiteFields
 from app.api.tabs import SiteSelection
+from app.services.browser_manager import CHROMIUM_UI_ARGS
 
 
 class SitesTests(unittest.TestCase):
@@ -27,6 +28,10 @@ class SitesTests(unittest.TestCase):
     def test_selection_only_takes_id(self):
         for fields in [{'site_id':1,'url':'https://evil.test'},{'site_id':0},{'site_id':True},{'site_id':'1'},{'site_id':10**30}]:
             with self.subTest(fields=fields), self.assertRaises(ValidationError): SiteSelection(**fields)
+
+    def test_chromium_native_password_prompt_is_disabled(self):
+        self.assertIn('--disable-save-password-bubble', CHROMIUM_UI_ARGS)
+        self.assertIn('--disable-features=PasswordManagerOnboarding,PasswordManagerRedesign', CHROMIUM_UI_ARGS)
 
 
 if __name__=='__main__': unittest.main()

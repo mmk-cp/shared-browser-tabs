@@ -15,6 +15,15 @@ from app.services.download_manager import downloads
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# These are browser-chrome controls, not website automation. Native Chrome
+# password-save bubbles cannot be clicked through the page-scoped input socket,
+# so disable them before any profile window is created. The managed policy in
+# the image is the authoritative fallback; flags cover external/manual images.
+CHROMIUM_UI_ARGS = [
+    "--disable-save-password-bubble",
+    "--disable-features=PasswordManagerOnboarding,PasswordManagerRedesign",
+]
+
 
 class BrowserManager:
     """Owns the single persistent Chromium context used by the whole service."""
@@ -56,7 +65,7 @@ class BrowserManager:
                     headless=settings.browser_headless,
                     viewport={"width": settings.default_width, "height": settings.default_height},
                     accept_downloads=True, artifacts_dir=artifact_dir, downloads_path=artifact_dir,
-                    args=["--no-sandbox", "--disable-dev-shm-usage"],
+                    args=["--no-sandbox", "--disable-dev-shm-usage", *CHROMIUM_UI_ARGS],
                 )
             downloads.watch_context(self.context)
             self.context.on("close", lambda: asyncio.create_task(self._handle_context_close()))
@@ -88,6 +97,7 @@ class BrowserManager:
             "--no-default-browser-check",
             "--disable-session-crashed-bubble",
             "--no-sandbox",
+            *CHROMIUM_UI_ARGS,
             "--app=data:text/html,<title>Browser service</title>",
         ]
         # Never leave an unread stderr pipe: Chromium can fill it and freeze.
@@ -232,6 +242,7 @@ class BrowserManager:
             "--no-first-run",
             "--no-default-browser-check",
             "--no-sandbox",
+            *CHROMIUM_UI_ARGS,
         ]
         try:
             async with self.context.expect_page(timeout=12000) as page_info:

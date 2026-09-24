@@ -17,7 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN mkdir -p /app/data /browser-data /app/app/static/fonts \
     && cp /usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf /app/app/static/fonts/ \
-    && cp /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf /app/app/static/fonts/
+    && cp /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf /app/app/static/fonts/ \
+    && mkdir -p /etc/chromium/policies/managed /etc/opt/chrome/policies/managed \
+    && cp /app/docker/chromium-policy.json /etc/chromium/policies/managed/shared-browser.json \
+    && cp /app/docker/chromium-policy.json /etc/opt/chrome/policies/managed/shared-browser.json
 
 EXPOSE 8000
 ENV DISPLAY=:99

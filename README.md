@@ -30,6 +30,8 @@ Startup adds the nullable `users.session_id` column to existing databases withou
 
 The browser fills the page. A slim toolbar on the right provides a site picker (with manual URL entry for admins only), reload, clipboard, downloads, a mobile keyboard and a focus mode that hides the toolbar. Focus mode changes only this viewer, without entering the device/browser fullscreen mode. The small edge arrow restores the toolbar.
 
+Chromium's native password-save bubble is disabled by policy and startup flags. This prevents a browser-chrome dialog from covering the stream and becoming impossible to dismiss through page-scoped input. Existing prompts disappear after the browser container is recreated; this does not delete passwords already stored in the shared profile.
+
 - Select a card in the **انتخاب سایت** popover, then use the page directly. Admins can also enter a custom URL there.
 - Type Persian or English. Ctrl+A/C/V, text selection, double-click and drag are supported.
 - Right-click opens a viewer menu with copy, paste, select all, link actions, back and reload. It replaces the native Chromium menu, which is a separate X11 window and cannot be captured reliably by a single-window VNC stream.
