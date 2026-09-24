@@ -69,7 +69,9 @@ class TabManager:
             db.commit()
 
     async def get_or_create(self, db: Session, user: User) -> BrowserTab:
+        self.browser.check_available()
         async with self._lock:
+            self.browser.check_available()
             # A delete or replacement login may have happened while this
             # request waited for another user's browser window to be created.
             session_id = user.session_id

@@ -49,6 +49,12 @@ Regular users see searchable, keyboard-accessible cards, never the manual URL fo
 
 This is enforced server-side: `POST /api/tabs/me/navigate` is admin-only. Members use `POST /api/tabs/me/open-site` with **only `site_id`**; the server resolves its current URL and rejects hidden/deleted entries and extra URL fields. `GET /api/sites` lists active entries to signed-in users. `/api/sites/manage` and all catalog mutations require admin authorization; writes additionally require CSRF. Direct API calls cannot bypass these role checks. Deleting the highest-numbered entry does not recycle its ID on SQLite.
 
+### Admin browser-data reset
+
+The red **پاک‌سازی کامل داده‌های مرورگر** action on `/admin` is intentionally destructive: expand its warning, type **پاک شود**, then press the final delete button. It stops the shared Chromium process and resets its complete user-data directory, including history/download history, cache, cookies, saved passwords, local/IndexedDB/service-worker storage, permissions, sessions, bookmarks, extensions and browser settings. It then restarts Chromium and reopens application tabs at their recorded URLs. Unsaved work is lost and website logins are cleared. **Application accounts/passwords, application sessions, the admin site catalog and database are preserved**; recorded tab URLs are retained. Reopened sites can immediately create fresh history/cache/cookies. Downloaded files already saved on users' devices and external backups are not erased, and forensic secure erasure is not promised.
+
+The operation requires admin authorization, CSRF and an explicit confirmation body; clients cannot supply paths. Before deletion, profile markers, path scope, symlink roots and database overlap are checked. Directory symlinks inside the profile are not followed. Maintenance blocks concurrent window creation and conflicting browser operations. Closing the admin page does not interrupt the operation. On a cleanup error Chromium startup is attempted, available tabs are restored, and a partial-failure warning is returned. There is no automatic backup of the deleted data. Tests exercise disposable profiles only, never the real shared profile.
+
 The `sites` table is created additively on startup. Existing users, sessions, browser tabs, cookies and profile data are preserved; no demo sites are inserted. Existing tabs are not closed when a catalog entry is hidden or deleted. **This is a launcher/manual-address policy, not a domain/network allowlist or a locked-down kiosk**: links inside sites, redirects, sign-in flows, history and already-open pages remain usable. Enforcing a domain allowlist would require a separate navigation/network policy and could affect login, uploads and third-party resources.
 
 ## Transport and isolation
@@ -101,7 +107,12 @@ Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled
 
 ## Verification
 
+Browser-cleanup tests delete only disposable Chromium profiles. UI cleanup tests intercept every API call and never reset the live shared profile.
+
 ```sh
+docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_browser_data_cleanup tests.test_browser_cleanup_api'
+docker compose exec -T app timeout 90s python -m tests.e2e_browser_cleanup
+docker compose exec -T app timeout 90s python -m tests.e2e_browser_cleanup_ui
 docker compose exec -T app python -m tests.e2e_remote
 docker compose exec -T app python -m tests.e2e_accounts
 docker compose exec -T app python -m tests.e2e_registration

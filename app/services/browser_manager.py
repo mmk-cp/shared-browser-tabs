@@ -4,6 +4,8 @@ import os
 import shutil
 import socket
 import subprocess
+from pathlib import Path
+from fastapi import HTTPException
 from urllib.parse import quote
 from typing import Dict, Optional
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
@@ -24,6 +26,36 @@ CHROMIUM_UI_ARGS = [
     "--disable-features=PasswordManagerOnboarding,PasswordManagerRedesign",
 ]
 
+def _clear_profile_browsing_data(profile_dir: str) -> dict:
+    """Reset only the validated, stopped Chromium user-data directory.
+
+    Chromium's storage layout changes between releases. A complete profile
+    reset covers Network/, WALs, site permissions and unknown/new stores too.
+    It deliberately does not retain a backup containing the deleted secrets.
+    """
+    original = Path(profile_dir).expanduser().absolute()
+    profile = original.resolve()
+    if (original != profile or not profile.is_dir() or len(profile.parts) < 3
+            or profile in {Path.cwd(), Path.home()}
+            or profile in Path.cwd().parents or profile in Path.home().parents):
+        raise RuntimeError('Refusing to clear an unsafe Chromium profile path')
+    if not (profile / 'Local State').is_file() or not (profile / 'Default').is_dir():
+        raise RuntimeError('Chromium profile markers are missing; refusing deletion')
+    # An incorrect BROWSER_DATA_DIR must never include the application DB.
+    from sqlalchemy.engine import make_url
+    database = make_url(settings.database_url)
+    if database.drivername.startswith('sqlite') and database.database and database.database != ':memory:':
+        db_path = Path(database.database).resolve()
+        if profile == db_path or profile in db_path.parents:
+            raise RuntimeError('Chromium profile overlaps the application database')
+    removed_files = removed_dirs = 0
+    for path in list(profile.iterdir()):
+        if path.is_symlink() or path.is_file():
+            path.unlink(); removed_files += 1
+        elif path.is_dir():
+            shutil.rmtree(path); removed_dirs += 1
+    return {'files': removed_files, 'directories': removed_dirs}
+
 
 class BrowserManager:
     """Owns the single persistent Chromium context used by the whole service."""
@@ -41,6 +73,11 @@ class BrowserManager:
         self._stopping = False
         self._ignore_next_close = False
         self.restore_callback = None
+        self.maintenance_owner = None
+
+    def check_available(self):
+        if self.maintenance_owner is not None and self.maintenance_owner is not asyncio.current_task():
+            raise HTTPException(503, 'مرورگر در حال پاک‌سازی یا راه‌اندازی مجدد است؛ کمی صبر کنید.')
 
     @property
     def running(self) -> bool:
@@ -50,7 +87,9 @@ class BrowserManager:
         return self.context
 
     async def start(self) -> BrowserContext:
+        self.check_available()
         async with self._lock:
+            self.check_available()
             if self.context is not None:
                 return self.context
             os.makedirs(settings.browser_data_dir, exist_ok=True)
@@ -176,6 +215,7 @@ class BrowserManager:
                     await asyncio.to_thread(self.process.wait, 5)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
+                    await asyncio.to_thread(self.process.wait, 5)
             self.process = None
         if not self._ignore_next_close:
             self._ignore_next_close = False
@@ -191,8 +231,19 @@ class BrowserManager:
         await self.stop()
         return await self.start()
 
+    async def clear_browser_data(self) -> dict:
+        """Stop Chromium, clear shared browsing state, then start it again."""
+        await self.stop()
+        try:
+            return await asyncio.to_thread(_clear_profile_browsing_data, settings.browser_data_dir)
+        finally:
+            # Never leave the application without a browser after a partial
+            # filesystem error; the caller can safely report the failure.
+            if self.context is None:
+                await self.start()
+
     async def _recover_after_crash(self) -> None:
-        if self._stopping:
+        if self._stopping or self.maintenance_owner is not None:
             return
         logger.error("BROWSER_CONTEXT_CLOSED attempting recovery")
         try:
@@ -223,6 +274,7 @@ class BrowserManager:
         persistent profile.  The native window can then be exported alone by
         x11vnc, without exposing anybody else's tab or the desktop.
         """
+        self.check_available()
         if not self.context:
             await self.start()
         assert self.context is not None

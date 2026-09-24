@@ -86,6 +86,27 @@ $('create-user-form').addEventListener('submit', async event => {
   finally { $('create-user').disabled = false; }
 });
 $('refresh-users').onclick = loadUsers;
+const clearButton = $('clear-browser-data');
+clearButton.onclick = async () => {
+  $('clear-browser-form').hidden = false; clearButton.hidden = true;
+  $('clear-confirmation').value = ''; $('clear-browser-submit').disabled = true;
+  $('clear-confirmation').focus();
+};
+$('clear-confirmation').oninput = () => { $('clear-browser-submit').disabled = $('clear-confirmation').value.trim() !== 'پاک شود'; };
+$('cancel-browser-clear').onclick = () => { $('clear-browser-form').hidden = true; clearButton.hidden = false; clearButton.focus(); };
+$('clear-browser-form').onsubmit = async event => {
+  event.preventDefault();
+  if ($('clear-confirmation').value.trim() !== 'پاک شود' || clearButton.disabled) return;
+  clearButton.disabled = true; $('clear-browser-message').classList.remove('success');
+  $('clear-browser-submit').disabled = true; $('cancel-browser-clear').disabled = true; $('clear-confirmation').disabled = true;
+  $('clear-browser-message').textContent = 'در حال بستن مرورگر و پاک‌سازی داده‌ها…';
+  try {
+    await request('/api/browser/clear-data', {method:'POST', body:JSON.stringify({confirmation:'DELETE_BROWSER_DATA'})});
+    $('clear-browser-message').classList.add('success');
+    $('clear-browser-message').textContent = 'پروفایل مرورگر پاک و از نو ساخته شد. تب‌ها باز شدند؛ ورود مجدد به سایت‌ها لازم است.';
+  } catch (error) { $('clear-browser-message').textContent = error.message; }
+  finally { clearButton.disabled = false; clearButton.hidden = false; $('clear-browser-form').hidden = true; $('cancel-browser-clear').disabled = false; $('clear-confirmation').disabled = false; }
+};
 $('admin-logout').onclick = async () => {
   try { await request('/api/auth/logout', {method:'POST'}); leaving = true; location.replace('/login'); }
   catch (error) { $('users-message').textContent = error.message; }

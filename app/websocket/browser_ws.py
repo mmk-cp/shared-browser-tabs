@@ -19,9 +19,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def watch_session(websocket: WebSocket):
+async def watch_session(websocket: WebSocket, page=None):
     """Revoke already-open streams too, including idle/background viewers."""
     while True:
+        if page is not None and page.is_closed():
+            await websocket.close(code=1012, reason="Browser restarted")
+            return
         if not await authenticated_user(websocket):
             await websocket.close(code=4401, reason="Session ended")
             return
@@ -110,7 +113,7 @@ async def input_socket(websocket: WebSocket):
                     await websocket.send_json({"id": event["id"], "error": "این فرمان اجرا نشد؛ دوباره تلاش کنید."})
 
     tasks = {
-        asyncio.create_task(watch_session(websocket)),
+        asyncio.create_task(watch_session(websocket, page)),
         asyncio.create_task(receive_events()),
         asyncio.create_task(apply_events()),
         asyncio.create_task(forward_clipboard()),

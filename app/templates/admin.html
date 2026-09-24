@@ -18,6 +18,18 @@
       </nav>
     </header>
     <p class="session-notice">هر حساب فقط یک نشست ورود فعال دارد. ورود جدید، دسترسی و اتصال قبلی همان حساب را قطع می‌کند.</p>
+    <section class="admin-card danger-card" aria-labelledby="clear-browser-heading">
+      <h2 id="clear-browser-heading">پاک‌سازی داده‌های مرورگر</h2>
+      <p class="muted">پروفایل Chromium برای همهٔ کاربران از نو ساخته می‌شود: هیستوری، کش، کوکی‌ها، رمزهای ذخیره‌شده، داده‌های سایت، بوکمارک‌ها، افزونه‌ها و تنظیمات مرورگر حذف می‌شوند. همه از سایت‌ها خارج می‌شوند و کار ذخیره‌نشده از دست می‌رود.</p>
+      <p class="muted">حساب‌های برنامه، رمز ورود برنامه و فهرست سایت‌های ادمین حفظ می‌شوند. تب‌ها با آدرس قبلی باز می‌شوند؛ باز شدن سایت‌ها می‌تواند دوباره کش و کوکی ایجاد کند. این حذف قابل بازگشت نیست.</p>
+      <button id="clear-browser-data" class="danger-button" type="button">پاک‌سازی کامل داده‌های مرورگر</button>
+      <form id="clear-browser-form" hidden>
+        <label for="clear-confirmation">برای تأیید، عبارت «پاک شود» را وارد کنید:</label>
+        <input id="clear-confirmation" autocomplete="off" required placeholder="پاک شود">
+        <div class="panel-actions"><button id="clear-browser-submit" class="danger-button" disabled>حذف دائمی و راه‌اندازی مجدد</button><button id="cancel-browser-clear" type="button" class="secondary-button">انصراف</button></div>
+      </form>
+      <p id="clear-browser-message" class="form-message" role="status" aria-live="polite"></p>
+    </section>
     <div class="admin-grid">
       <section class="admin-card" aria-labelledby="create-heading">
         <h2 id="create-heading">ساخت کاربر جدید</h2>
