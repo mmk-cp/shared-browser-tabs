@@ -8,6 +8,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.config import get_settings
 
 
 class DNSSettings(BaseModel):
@@ -109,10 +110,13 @@ def configure_xray_dns(config, saved):
     # DNS must bootstrap the VPN itself: send plain DNS to the selected IPs
     # directly, never recursively through the tunnel or a different resolver.
     config['routing']['rules'].insert(0, {'type':'field', 'inboundTag':['dns-query'], 'outboundTag':'direct'})
-    config['dns'] = {'tag': 'dns-query', 'servers': dns['servers'], 'queryStrategy': 'UseIP', 'disableFallback': True}
+    ipv4_only = get_settings().browser_proxy_ipv4_only
+    strategy = 'ForceIPv4' if ipv4_only else 'ForceIP'
+    config['dns'] = {'tag': 'dns-query', 'servers': dns['servers'],
+                     'queryStrategy': 'UseIPv4' if ipv4_only else 'UseIP', 'disableFallback': True}
     # Resolve public destination names here, not using the remote VPN server's
     # unknown resolver. Failure must not silently defer DNS to that server.
-    config['outbounds'][0]['targetStrategy'] = 'ForceIP'
-    config['outbounds'][0]['streamSettings']['sockopt'] = {'domainStrategy': 'ForceIP'}
-    config['outbounds'][1]['settings']['domainStrategy'] = 'ForceIP'
+    config['outbounds'][0]['targetStrategy'] = strategy
+    config['outbounds'][0]['streamSettings']['sockopt'] = {'domainStrategy': strategy}
+    config['outbounds'][1]['settings']['domainStrategy'] = strategy
     return config

@@ -18,15 +18,24 @@ class VlessTests(unittest.TestCase):
         self.assertEqual(chromium_dns_policy(saved),{'DnsOverHttpsMode':'off'})
         config,_=vless_config(LINK+'security=tls')
         configure_xray_dns(config,saved)
-        self.assertEqual(config['outbounds'][0]['targetStrategy'],'ForceIP')
+        self.assertEqual(config['outbounds'][0]['targetStrategy'],'ForceIPv4')
         self.assertEqual(config['dns']['servers'],['8.8.8.8','1.1.1.1'])
-        self.assertEqual(config['outbounds'][0]['streamSettings']['sockopt']['domainStrategy'],'ForceIP')
+        self.assertEqual(config['outbounds'][0]['streamSettings']['sockopt']['domainStrategy'],'ForceIPv4')
+        self.assertEqual(config['dns']['queryStrategy'],'UseIPv4')
         self.assertEqual(config['routing']['rules'][0]['outboundTag'],'direct')
         self.assertEqual(chromium_dns_policy({})['DnsOverHttpsMode'],'off')
         for value in ['8.8.8.8:53','http://dns.test/dns-query','https://dns.google/dns-query','0.0.0.0','224.0.0.1']:
             with self.assertRaises(ValueError): DNSSettings(mode='custom',servers=[value])
         self.assertEqual(dns_settings({'dns':{'mode':'doh','servers':['https://dns.google/dns-query']}}),
                          {'mode':'custom','servers':['8.8.8.8']})
+
+    def test_explicit_dual_stack_opt_in(self):
+        config,_=vless_config(LINK+'security=tls')
+        with patch('app.services.browser_dns.get_settings') as settings:
+            settings.return_value.browser_proxy_ipv4_only=False
+            configure_xray_dns(config,{'dns':{'mode':'custom','servers':['8.8.8.8']}})
+        self.assertEqual(config['dns']['queryStrategy'],'UseIP')
+        self.assertEqual(config['outbounds'][0]['targetStrategy'],'ForceIP')
 
     def test_container_dns_switch_and_restore_only_temporary_files(self):
         with tempfile.TemporaryDirectory() as root:
