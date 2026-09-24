@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.services.clipboard_bridge import clipboard_bridge
 from app.services.file_transfer import file_transfers
 from app.services.download_manager import downloads
+from app.services.proxy_manager import proxy_manager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -104,7 +105,7 @@ class BrowserManager:
                     headless=settings.browser_headless,
                     viewport={"width": settings.default_width, "height": settings.default_height},
                     accept_downloads=True, artifacts_dir=artifact_dir, downloads_path=artifact_dir,
-                    args=["--no-sandbox", "--disable-dev-shm-usage", *CHROMIUM_UI_ARGS],
+                    args=["--no-sandbox", "--disable-dev-shm-usage", *CHROMIUM_UI_ARGS, *proxy_manager.browser_args()],
                 )
             downloads.watch_context(self.context)
             self.context.on("close", lambda: asyncio.create_task(self._handle_context_close()))
@@ -137,6 +138,7 @@ class BrowserManager:
             "--disable-session-crashed-bubble",
             "--no-sandbox",
             *CHROMIUM_UI_ARGS,
+            *proxy_manager.browser_args(),
             "--app=data:text/html,<title>Browser service</title>",
         ]
         # Never leave an unread stderr pipe: Chromium can fill it and freeze.

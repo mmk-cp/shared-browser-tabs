@@ -18,6 +18,21 @@
       </nav>
     </header>
     <p class="session-notice">هر حساب فقط یک نشست ورود فعال دارد. ورود جدید، دسترسی و اتصال قبلی همان حساب را قطع می‌کند.</p>
+    <section class="admin-card proxy-card" aria-labelledby="proxy-heading">
+      <div class="users-heading"><h2 id="proxy-heading">پروکسی مرورگر · VLESS</h2><button type="button" id="proxy-refresh" class="secondary-button">بررسی وضعیت</button></div>
+      <p id="proxy-status" class="session-notice" role="status">در حال دریافت وضعیت…</p>
+      <p class="muted">این تنظیم برای مرورگر مشترک همهٔ کاربران است. آدرس‌های localhost، 127.0.0.1 و شبکه‌های داخلی مثل 192.168.x.x و 10.x.x مستقیم باز می‌شوند. اتصال شما به پنل تغییری نمی‌کند.</p>
+      <form id="proxy-form">
+        <label class="checkbox-label"><input type="checkbox" id="proxy-enabled"> عبور ترافیک مرورگر از VLESS</label>
+        <label for="proxy-uri">لینک اتصال VLESS</label>
+        <textarea id="proxy-uri" dir="ltr" rows="3" maxlength="16384" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="vless://…" aria-describedby="proxy-help"></textarea>
+        <small id="proxy-help">لینک خام را وارد کنید، نه لینک قالب‌بندی‌شده. WS، TCP و gRPC با TLS یا Reality پشتیبانی می‌شوند. برای نگه‌داشتن کانفیگ ذخیره‌شده، این کادر را خالی بگذارید؛ لینک محرمانه دوباره نمایش داده نمی‌شود.</small>
+        <p id="proxy-warning" class="form-message" hidden>هشدار: این کانفیگ بررسی گواهی TLS را غیرفعال می‌کند (allowInsecure). فقط با آگاهی از خطر استفاده کنید.</p>
+        <p class="muted">ذخیره و اعمال، مرورگر همه را راه‌اندازی مجدد می‌کند؛ ابتدا کار ذخیره‌نشده را ذخیره کنید. کوکی‌ها و ورود سایت‌ها پاک نمی‌شوند. اگر پروکسی قطع شود، سایت‌های عمومی خودکار به اتصال مستقیم برنمی‌گردند.</p>
+        <button type="submit" id="proxy-save" class="primary" disabled>ذخیره و راه‌اندازی مجدد مرورگر</button>
+        <p id="proxy-message" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
     <section class="admin-card danger-card" aria-labelledby="clear-browser-heading">
       <h2 id="clear-browser-heading">پاک‌سازی داده‌های مرورگر</h2>
       <p class="muted">پروفایل Chromium برای همهٔ کاربران از نو ساخته می‌شود: هیستوری، کش، کوکی‌ها، رمزهای ذخیره‌شده، داده‌های سایت، بوکمارک‌ها، افزونه‌ها و تنظیمات مرورگر حذف می‌شوند. همه از سایت‌ها خارج می‌شوند و کار ذخیره‌نشده از دست می‌رود.</p>

@@ -1,7 +1,9 @@
 .env
 __pycache__/
 *.py[cod]
-data/*.db
+# Runtime data includes database journals and private proxy credentials.
+data/*
+!data/.gitkeep
 browser-data/*
 !browser-data/.gitkeep
 .pytest_cache/

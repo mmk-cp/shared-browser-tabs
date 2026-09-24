@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY docker/install_xray.py /tmp/install_xray.py
+RUN python /tmp/install_xray.py
 COPY . .
 RUN mkdir -p /app/data /browser-data /app/app/static/fonts \
     && cp /usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf /app/app/static/fonts/ \

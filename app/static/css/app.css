@@ -62,7 +62,7 @@
 .session-notice{padding:14px 18px;background:#152c30;border:1px solid #275151;border-radius:12px;color:#bce1d9;margin:26px 0}
 .admin-grid{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:22px;align-items:start}
 .admin-card{background:#14202a;border:1px solid #2a3f50;border-radius:16px;padding:24px;min-width:0}
-.danger-card{border-color:#714b4b;margin:22px 0;background:linear-gradient(145deg,#241b20,#14202a)}.danger-card h2{color:#ffc0b8}.danger-button{border:1px solid #9b5e5b;border-radius:9px;padding:11px 16px;background:#5a2e32;color:#ffe4df;font-weight:700}.danger-button:hover{background:#71383b}.danger-button:disabled{opacity:.55;cursor:wait}
+.proxy-card{margin:22px 0}.proxy-card textarea{width:100%;resize:vertical;min-height:96px;border:1px solid #365064;border-radius:10px;background:#0b141c;color:#edf5fa;padding:12px;font:14px monospace}.proxy-card small{display:block;line-height:1.9;color:#a5bac8}.proxy-card .users-heading{flex-wrap:wrap}.proxy-card button{min-height:44px}.proxy-card .session-notice{overflow-wrap:anywhere}.danger-card{border-color:#714b4b;margin:22px 0;background:linear-gradient(145deg,#241b20,#14202a)}.danger-card h2{color:#ffc0b8}.danger-button{border:1px solid #9b5e5b;border-radius:9px;padding:11px 16px;background:#5a2e32;color:#ffe4df;font-weight:700}.danger-button:hover{background:#71383b}.danger-button:disabled{opacity:.55;cursor:wait}
 .admin-card h2{margin:0 0 12px;font-size:20px}.admin-card .muted{font-size:13px;margin-bottom:20px}
 .admin-card small{display:block;color:#a0b1be;font-size:12px;margin-top:8px}
 .checkbox-label{display:flex;align-items:center;gap:10px;margin:20px 0}.checkbox-label input{width:18px;height:18px;accent-color:#58d8ad;flex-shrink:0}

@@ -30,7 +30,7 @@ class CleanupAPITests(unittest.IsolatedAsyncioTestCase):
         self.app=FastAPI(); self.app.include_router(routes.router); self.app.dependency_overrides[get_db]=database
         self.client=httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),base_url='http://qa.test')
         self.browser=SimpleNamespace(maintenance_owner=None,running=True,pages={},
-            clear_browser_data=AsyncMock(return_value={'files':1,'directories':1}),start=AsyncMock(),restart=AsyncMock())
+            clear_browser_data=AsyncMock(return_value={'files':1,'directories':1}),start=AsyncMock(),stop=AsyncMock(),restart=AsyncMock())
         self.tabs=SimpleNamespace(_lock=asyncio.Lock(),restore_pages=AsyncMock())
         self.patches=[patch.object(routes,'browser_manager',self.browser),patch.object(routes,'tab_manager',self.tabs),
             patch.object(routes,'SessionLocal',self.sessions),patch.object(routes,'stream_manager',SimpleNamespace(stop_all=AsyncMock())),
@@ -84,6 +84,23 @@ class CleanupAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code,500)
         self.tabs.restore_pages.assert_awaited_once()
         self.assertIsNone(self.browser.maintenance_owner)
+
+    async def test_proxy_admin_only_csrf_and_apply(self):
+        proxy=SimpleNamespace(saved={'enabled':False,'uri':''},apply=AsyncMock(),status=lambda:{'enabled':False})
+        body={'enabled':True,'uri':'vless://00000000-0000-4000-8000-000000000001@example.com:443?security=tls&type=ws'}
+        with patch.object(routes,'proxy_manager',proxy):
+            self.assertEqual((await self.client.get('/api/browser/proxy')).status_code,401)
+            self.login(False)
+            self.assertEqual((await self.client.get('/api/browser/proxy')).status_code,403)
+            self.assertEqual((await self.client.put('/api/browser/proxy',json=body)).status_code,403)
+            self.login()
+            self.assertEqual((await self.client.put('/api/browser/proxy',json=body,headers={'X-CSRF-Token':''})).status_code,403)
+            self.assertEqual((await self.client.put('/api/browser/proxy',json={'enabled':True,'uri':'invalid'})).status_code,400)
+            proxy.apply.assert_not_called()
+            self.assertEqual((await self.client.put('/api/browser/proxy',json=body)).status_code,200)
+            proxy.apply.assert_awaited_once_with(body)
+            self.browser.stop.assert_awaited_once(); self.browser.start.assert_awaited_once()
+            self.tabs.restore_pages.assert_awaited_once()
 
 
 if __name__=='__main__': unittest.main()

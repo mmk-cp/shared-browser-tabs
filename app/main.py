@@ -12,6 +12,7 @@ from app.db import SessionLocal, initialize_database
 from app.models import User
 from app.services.auth_service import hash_password, get_user_from_request
 from app.services.browser_manager import browser_manager
+from app.services.proxy_manager import proxy_manager
 from app.services.stream_manager import stream_manager
 import app.services.tab_manager as tab_module
 from app.services.tab_manager import TabManager
@@ -33,6 +34,11 @@ from app.websocket import browser_ws
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_database()
+    proxy_manager.load()
+    try:
+        await proxy_manager.start()
+    except Exception:
+        logger.error('PROXY_START_FAILED: repair configuration in admin panel; no direct fallback')
     with SessionLocal() as db:
         if not db.query(User).first():
             admin = User(username=settings.admin_username, password_hash=hash_password(settings.admin_password), is_admin=True)
@@ -43,6 +49,7 @@ async def lifespan(app: FastAPI):
     yield
     await stream_manager.stop_all()
     await browser_manager.stop()
+    await proxy_manager.stop()
 
 
 app = FastAPI(title="Shared Browser Tabs", version="1.0.0", lifespan=lifespan)

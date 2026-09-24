@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     browser_headless: bool = False
     browser_connect_over_cdp: bool = True
     browser_debug_port: int = 9222
+    browser_proxy_file: str = './data/browser-proxy.json'
     browser_executable_path: str | None = None
     browser_fps: int = 15
     browser_jpeg_quality: int = 70

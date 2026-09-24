@@ -105,6 +105,23 @@ Run test suites **sequentially**, under the Compose memory cap and with a wall-c
 
 Use HTTPS behind a reverse proxy for deployment, with WebSocket upgrades enabled and the original Host/Origin preserved. Set `COOKIE_SECURE=true` when served over HTTPS. Do not publish CDP or VNC ports. Stop the app before backing up the profile and database together.
 
+## Admin VLESS proxy
+
+In `/admin`, enable **پروکسی مرورگر · VLESS**, paste a raw `vless://` URI, and save/confirm the browser restart. Supports WS (including custom headers), TCP and gRPC with TLS or Reality; unsupported transport/encryption parameters are rejected. A blank URI retains the saved one. Uncheck and save to return to direct access. This affects every shared-browser user, not the web panel, host, or other containers. Existing cookies/logins survive the restart; unsaved work does not.
+
+The image includes checksum-pinned Xray v25.10.15 for amd64/arm64, chosen for compatibility with existing `allowInsecure` links (newer releases remove that option, including by date cutoff). Review this compatibility pin when updating dependencies; it is not a claim of using the latest security fixes. Its HTTP listener is **127.0.0.1:10808 inside the container only**; no new published ports, host capabilities or separate service are needed. Rebuild/recreate the app image in Portainer. Keep the existing `/app/data` volume. The URI is stored in `data/browser-proxy.json` (mode **0600**, outside Chromium's profile), not returned by the API or logged. It is a credential in plaintext on disk: protect volume backups. Runtime Xray config is in private RAM-backed `/dev/shm`. Clearing browser data does not delete proxy settings.
+
+Chromium bypasses localhost, single-label/local names, loopback, RFC1918, link-local, CGNAT and private IPv6 literals. Xray also routes domains resolving to private addresses directly; DNS resolution may therefore use the server's resolver. `localhost` means the **container**, not the user's computer; LAN connectivity still depends on Docker/network routing. Public browser requests have no automatic direct fallback if Xray fails. QUIC and non-proxied WebRTC UDP are disabled while enabled; this is a browser proxy, **not an OS-level VPN/firewall security boundary**. `allowInsecure=true` is honored with a prominent warning. Prefer a valid TLS certificate and remove that parameter when possible.
+
+Status reports local process readiness, not end-to-end reachability of the upstream server. Configuration failures roll back; if rollback/startup fails, public browsing stays blocked until an admin fixes or disables the proxy. Applying is admin-only, CSRF-protected and serialized with browser restart/reset. The provided example is not auto-installed and no real subscription credentials are in the repository.
+
+### Focused proxy checks
+
+```sh
+docker compose exec -T app sh -c 'ulimit -v 524288; exec timeout 30s python -m unittest tests.test_proxy tests.test_browser_cleanup_api'
+docker compose exec -T app timeout 30s python -m tests.check_xray_config
+```
+
 ## Verification
 
 Browser-cleanup tests delete only disposable Chromium profiles. UI cleanup tests intercept every API call and never reset the live shared profile.

@@ -12,7 +12,7 @@ async function request(path, options = {}) {
   }
   if (response.status === 403) { leaving = true; location.replace('/dashboard'); throw Error('دسترسی ادمین لازم است.'); }
   if (response.status === 409 && path === '/api/users') throw Error('این نام کاربری قبلاً ثبت شده است.');
-  if (response.status === 422) throw Error('نام کاربری و طول رمز عبور را بررسی کنید.');
+  if (response.status === 422) throw Error(path === '/api/browser/proxy' ? 'لینک VLESS یا تنظیمات ارسالی معتبر نیست.' : 'نام کاربری و طول رمز عبور را بررسی کنید.');
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw Error(typeof data.detail === 'string' ? data.detail : 'درخواست انجام نشد؛ دوباره تلاش کنید.');
@@ -86,6 +86,44 @@ $('create-user-form').addEventListener('submit', async event => {
   finally { $('create-user').disabled = false; }
 });
 $('refresh-users').onclick = loadUsers;
+let proxySaved = null;
+function showProxyStatus(status) {
+  proxySaved = status;
+  $('proxy-enabled').checked = status.enabled;
+  const state = status.enabled ? (status.running ? 'روشن · سرویس محلی آماده است' : 'خطا · پروکسی در دسترس نیست؛ اتصال عمومی مسدود می‌ماند') : 'خاموش · اتصال مستقیم';
+  $('proxy-status').textContent = state + (status.server ? ` — ${status.server}:${status.port} (${status.transport})` : '') + (status.running ? '؛ اتصال به سرور مقصد هنوز تأیید نشده است.' : '');
+  if (status.load_failed) $('proxy-status').textContent += ' تنظیمات ذخیره‌شده خوانده نشد؛ لینک را دوباره وارد کنید یا پروکسی را خاموش کنید.';
+  proxyWarning();
+}
+function proxyWarning() {
+  const uri = $('proxy-uri').value.trim();
+  $('proxy-warning').hidden = !(uri ? /[?&](?:allowInsecure|insecure)=(?:true|1)(?:&|#|$)/i.test(uri) : proxySaved?.insecure);
+}
+async function loadProxy() {
+  $('proxy-refresh').disabled = true;
+  try { showProxyStatus(await request('/api/browser/proxy')); $('proxy-save').disabled = false; }
+  catch (error) { $('proxy-message').textContent = error.message; }
+  finally { $('proxy-refresh').disabled = false; }
+}
+$('proxy-refresh').onclick = loadProxy;
+$('proxy-uri').oninput = proxyWarning;
+$('proxy-form').onsubmit = async event => {
+  event.preventDefault();
+  if ($('proxy-save').disabled) return;
+  const enabled = $('proxy-enabled').checked, uri = $('proxy-uri').value.trim();
+  const message = $('proxy-message'); message.classList.remove('success');
+  if (enabled && !uri && !proxySaved?.configured) { message.textContent = 'ابتدا لینک VLESS را وارد کنید.'; $('proxy-uri').focus(); return; }
+  if (!confirm('مرورگر همهٔ کاربران برای اعمال پروکسی راه‌اندازی مجدد می‌شود. ادامه می‌دهید؟')) return;
+  for (const id of ['proxy-save','proxy-refresh','proxy-uri','proxy-enabled']) $(id).disabled = true;
+  message.textContent = 'در حال اعمال تنظیمات و راه‌اندازی مجدد مرورگر…';
+  try {
+    const status = await request('/api/browser/proxy', {method:'PUT', body:JSON.stringify({enabled, uri})});
+    $('proxy-uri').value = ''; showProxyStatus(status);
+    message.classList.add('success'); message.textContent = 'تنظیمات اعمال شد. تب‌ها دوباره باز شدند.';
+  } catch (error) { message.textContent = error.message; }
+  finally { for (const id of ['proxy-save','proxy-refresh','proxy-uri','proxy-enabled']) $(id).disabled = false; }
+};
+loadProxy();
 const clearButton = $('clear-browser-data');
 clearButton.onclick = async () => {
   $('clear-browser-form').hidden = false; clearButton.hidden = true;
